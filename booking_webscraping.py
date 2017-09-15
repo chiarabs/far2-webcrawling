@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 from bs4 import BeautifulSoup as bs
+from fake_useragent import UserAgent
 import requests
 import re
 
@@ -12,7 +13,10 @@ def crawler(location,research_options):
 
     hotel_table=[]
     
-    headers = {'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:52.0) Gecko/20100101 Firefox/52.0'}
+    #setting random user agent 
+    ua=UserAgent()
+    headers={'User-Agent': ua.random}
+    print (headers)
     
     day_in=research_options[0]
     day_out=research_options[3]
@@ -42,7 +46,7 @@ def crawler(location,research_options):
             hotel_link=base_url+hotel_link
             print(hotel_link)
             response = requests.get(hotel_link, headers=headers).text.strip('\t\r\n')
-            soup = bs(response,'lxml')#.encode('utf8')
+            soup = bs(response,'lxml')#.encode('utf-8')
             if soup.find('span', class_='sr-hotel__name'):
                 hotel_name=soup.find('span', class_='sr-hotel__name').text.strip('\t\r\n')
             else:
