@@ -1,2 +1,2 @@
 # far2-webcrawling
-editing - test
+The aim of this project is to find and collect data from booking.com

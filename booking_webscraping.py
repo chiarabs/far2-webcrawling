@@ -3,6 +3,7 @@
 from bs4 import BeautifulSoup as bs
 from fake_useragent import UserAgent
 from fake_useragent import FakeUserAgentError
+
 import requests
 import re
 
@@ -18,6 +19,7 @@ def crawler(location,research_options):
             self.av_rating=av_rating
             self.price = price
     
+
     hotel_list=[]
 
     #setting random user agent
@@ -28,6 +30,8 @@ def crawler(location,research_options):
         print("Connection error, please verify your connection")
         return
 
+    #setting random user agent 
+    ua=UserAgent()
     headers={'User-Agent': ua.random}
     print (headers)
     
