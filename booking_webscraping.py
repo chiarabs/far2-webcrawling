@@ -45,10 +45,11 @@ def crawler(location,day_in,day_out):
   
     #loop  over all the pages containing research results iterating on the URL offset parameter
     #loop  stops when it finds error message "take control of your search"
-
-    for i in range(0,1): #set the number of visited pages 
-        offset=i*15
-        url='https://www.booking.com/searchresults.it.html?;sid=1542c45b9ca387a9d5dc25d864e1ee17;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+dest_id+';ss='+location+';dest_type=city;sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
+    offset_range=0 
+    for i in range(0,2): #set the number of visited pages 
+        offset=i*offset_range
+        print(offset)
+        url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+dest_id+';ss='+location+';dest_type=city;sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
                 
         print (url)
 
@@ -63,11 +64,19 @@ def crawler(location,day_in,day_out):
         if soup.get('class') == 'Take Control of Your Search':
             break
 
+        last_show=int(soup.find('span', class_='sr_showed_amount_last').text.strip('\t\r\n'))
+        print(last_show)
+        first_show=(soup.find('span' ,class_='sr_showed_amount').text)
+        first_show=[int(s) for s in first_show.split() if s.isdigit()][0]
+        print(first_show)
+        offset_range=last_show-(first_show-1)
+        print(offset_range)
+
         #loop over hotel  links to get each hotel_soup
         for link in soup.find_all('a',class_='hotel_name_link url'):
             hotel_link=link['href']
             hotel_link=base_url+hotel_link
-            print(hotel_link)
+            #print(hotel_link)
             try:
                 response = requests.get(url, headers=headers)
             except requests.exceptions.RequestException as e:  
