@@ -7,21 +7,20 @@ import requests
 import re
 import psycopg2
 import argparse
+from datetime import datetime
 
-
+parser = argparse.ArgumentParser()
+parser.add_argument("-t", "--scraping_type", action="count", default=0)
+args = parser.parse_args()
+    
 
 
 base_url='http://www.booking.com'
 
 def crawler(location,day_in,day_out):
 
-#for the specific location,day_in(yyy-mm-dd),day_out(yyyy-mm-dd) return a list of class object: hotel_list=[hotel_table(name,av_rating,price)]
+#for the specific location,day_in(yyy-mm-dd),day_out(yyyy-mm-dd) return a list of class object
     dest_id='-110502'
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--scraping_type", action="count", default=0)
-    args = parser.parse_args()
-    
     
     #setting random user agent
     #ua = UserAgent()
@@ -75,16 +74,17 @@ def crawler(location,day_in,day_out):
 
             if args.scraping_type >= 2:
                 print("type of scraping: hotel_table_update")
-                hotel_table_list=[] 
+                hotel_table_list=[]
                 hotel_table=hotel_table_update(hotel_link,soup)
                 hotel_table_list.append(hotel_table)
+                return hotel_table_list
  
             if args.scraping_type < 2:   
                 print("type of scraping: hotel_data_update ")
                 hotel_data_list=[]
                 hotel_data=hotel_data_update(day_in,day_out,hotel_link,soup)
                 hotel_data_list.append(hotel_data)
-        
+                return hotel_data_list
 
 ##################################################################################################
 
@@ -92,10 +92,13 @@ def hotel_table_update(hotel_link,hotel_soup) :
 #find hotel destination id,name,address  
 
     class hotel_table(object):
-        def __init__(self,name,address,dest_id): #add hotel id
+        def __init__(self,hotel_id,name,address,dest_id): 
+            self.hotel_id=hotel_id
             self.name = name
             self.address=address
             self.dest_id=dest_id
+
+    hotel_id=hotel_soup.find("input", {"name":"hotel_id"})['value']
                
     dest_id=hotel_link[hotel_link.find('dest_id=')+len('dest_id='):hotel_link.rfind(';srfid')]
 
@@ -113,7 +116,7 @@ def hotel_table_update(hotel_link,hotel_soup) :
         hotel_address=None
     print(hotel_address)
 
-    return hotel_table(hotel_name,hotel_address,dest_id)
+    return hotel_table(hotel_id,hotel_name,hotel_address,dest_id)
 
      
 
@@ -122,11 +125,15 @@ def hotel_table_update(hotel_link,hotel_soup) :
 def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
 
     class hotel_data(object):
-        def __init__(self,day_in,day_out,price,av_rating): #add hotel id
+        def __init__(self,hotel_id,day_in,day_out,price,av_rating):
+            self.hotel_id=hotel_id
             self.day_in=day_in
             self.day_out=day_out
             self.price=price
             self.av_rating=av_rating
+            self.search_date=str(datetime.now())
+
+    hotel_id=hotel_soup.find("input", {"name":"hotel_id"})['value']
 
     av_rating=hotel_soup.find('span', class_='review-score-badge').text.strip('\t\r\n')
     #av_rating=float(re.sub('[^0-9,]', "", av_rating).replace(",", "."))
@@ -139,28 +146,61 @@ def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
         price= None
     print(price)       
     
-    return hotel_data(day_in,day_out,price,av_rating)
+    return hotel_data(hotel_id,day_in,day_out,price,av_rating)
 
 ##################################################################################################
                         
-def db_hotel_name_update(new_name) :
-    #connect to database and insert new row data if not present
+def db_hotel_list_update(hotel_table_list) :
+    #connect to database "webcrawling", insert new row data in hotel_list table  if hotel_id is not present
+    
+    conn=psycopg2.connect('dbname=webcrawling user=chiara')
+
+    cur=conn.cursor()
+    
+    for i in hotel_table_list:
+        hotel_id=i.hotel_id
+        name=i.name
+        hotel_address=i.address
+        location=i.dest_id
+
+        SQL = '''BEGIN;
+                 INSERT INTO hotel_list (name,location,hotel_address,hotel_id)
+	         SELECT %s,%s,%s,%s
+	         WHERE NOT EXISTS (SELECT hotel_id  FROM hotel_list WHERE hotel_id=%s
+	         );
+                 COMMIT;'''
+
+        data = (name,location,hotel_address,hotel_id,hotel_id)
+
+        cur.execute(SQL, data)
+
+    cur.close()
+    conn.close()
+
+def db_hotel_data_update(hotel_data_list) :
+    #connect to database "webcrawling", insert new row data in hotel_data table
     
     conn=psycopg2.connect('dbname=webcrawling user=chiara')
 
     cur=conn.cursor()
 
-    SQL = '''BEGIN;
-             INSERT INTO hotels (name)
-	     SELECT %s
-	     WHERE NOT EXISTS (
-	     SELECT * FROM hotels WHERE name=%s
-	     );
-             COMMIT;'''
+    for i in hotel_data_list:
+        hotel_id=i.hotel_id
+        day_in=i.day_in
+        day_out=i.day_out
+        price=i.price
+        av_rating=i.av_rating
+        search_date=i.search_date
+    
+        SQL = '''BEGIN;
+                 INSERT INTO hotel_data (hotel_id,day_in,day_out,price,av_rating,search_date)
+	         VALUES  %s,%s,%s,%s,%s,%s 
+                 ;
+                 COMMIT;'''
 
-    data = (new_name,new_name, )
+        data = (hotel_id,day_in,day_out,price,av_rating,search_date )
 
-    cur.execute(SQL, data)
+        cur.execute(SQL, data)
 
     cur.close()
     conn.close()
@@ -171,11 +211,19 @@ def db_hotel_name_update(new_name) :
 day_in='2017-09-20'
 day_out='2017-09-21'
 
-crawler('Aosta',day_in,day_out)
 
-#db updating hotels table
-#for i in hotel_list:
-#    db_hotel_name_update(i.name)
+
+
+if args.scraping_type >= 2:
+    hotel_table_list=crawler('Aosta',day_in,day_out)
+    print(hotel_table_list)
+    #db updating hotel_list in webcraling postgress db
+    db_hotel_list_update(hotel_table_list)
+
+if args.scraping_type < 2:   
+    hotel_data_list=crawler('Aosta',day_in,day_out)
+    #db updating hotel_data in webcrawling postgress db
+    db_hotel_data_update(hotel_data_list)
 
 
 
