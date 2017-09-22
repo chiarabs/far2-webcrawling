@@ -92,14 +92,18 @@ def crawler(location,day_in,day_out):
 
     
 
-            if args.scraping_type >= 2:
+            if args.scraping_type == 2:
                 hotel_table=hotel_table_update(hotel_link,soup)
                 hotel_list.append(hotel_table)
             
  
-            if args.scraping_type < 2:   
+            elif args.scraping_type < 2:   
                 hotel_data=hotel_data_update(day_in,day_out,hotel_link,soup)
                 hotel_list.append(hotel_data)
+            
+            elif args.scraping_type == 3:
+                hotel_review_list=hotel_review_update(headers,soup)
+                hotel_list.append(hotel_review_list)
         
     return hotel_list
 
@@ -171,6 +175,50 @@ def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
     return hotel_data(hotel_id,day_in,day_out,price,av_rating)
 
 ##################################################################################################
+
+def hotel_review_update (headers, hotel_soup) :
+    
+    class hotel_review(object):
+        def __init__(self,hotel_id,pos_comment,neg_comment,post_date,author):
+            self.hotel_id=hotel_id
+            self.pos_comment=pos_comment
+            self.neg_comment=neg_comment
+            self.post_date=post_date
+            self.author=author
+    hotel_review_list=[]
+
+    hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
+
+    link_to_rev=hotel_soup.find('a', class_='show_all_reviews_btn')['href']
+
+    link_to_rev=base_url+link_to_rev
+    print(link_to_rev)
+
+    for i in range (1,2): #set number of reviews visited pages
+
+        #(change N relative of the page during iteration: string-substitution "pageN" with "page"+i+")
+        link_to_rev=link_to_rev+';page='+str(i)
+
+        print (link_to_rev)
+
+        response = requests.get(link_to_rev,headers=headers).text
+        review_soup=bs(response,'lxml')
+
+        for element in review_soup.find_all('p', class_='review_neg'):
+            neg_comment=element.text #to do: remove 눇
+        
+        for element in review_soup.find_all('p', class_='review_pos'):
+            pos_comment = element.text
+    
+        #post_date = datetime.date(review_soup.find(.......))
+
+        #author = review_soup.find(.......)
+
+        hotel_review_list.append(hotel_review(hotel_id,pos_comment,neg_comment,post_date,author))
+    
+    return hotel_review_list
+            
+##################################################################################################
                         
 def db_hotel_list_update(hotel_table_list) :
     #connect to database "webcrawling", insert new row data in hotel_list table  if hotel_id is not present
@@ -229,27 +277,61 @@ def db_hotel_data_update(hotel_data_list) :
 
 ####################################################################################
 
+def  db_hotel_reviews_update(hotel_reviews_list):
+#connect to database "webcrawling", insert new row data in hotel_data table
+    
+    conn=psycopg2.connect('dbname=webcrawling user=chiara')
+
+    cur=conn.cursor()
+
+    for i in hotel_reviews_list:
+        hotel_id=i.hotel_id
+        pos_comment=i.pos_comment
+        neg_comment=i.neg_comment
+        post_date=i.post_date
+        author=i.author
+    
+        SQL = '''BEGIN;
+                 INSERT INTO hotel_reviews (hotel_id,) 
+	         VALUES (%s,%s,%s,%s,%s,%s) 
+                 ;
+                 COMMIT;'''
+############### TO COMPLETEEEEEEE
+        data = (hotel_id,day_in,day_out,price,av_rating,search_date )
+
+        cur.execute(SQL, data)
+
+    cur.close()
+    conn.close()
+
+####################################################################################
 #research_options
-day_in_str='2017-09-21'
-day_out_str='2017-09-22'
+day_in_str='2017-09-23'
+day_out_str='2017-09-24'
 
 
 
 day_in = datetime.datetime.strptime(day_in_str,'%Y-%m-%d')
 day_out= datetime.datetime.strptime(day_out_str, '%Y-%m-%d')
 
-if args.scraping_type >= 2:
+if args.scraping_type == 2:
     print("type of scraping: hotel_table_update")
     hotel_table_list=crawler('Aosta',day_in,day_out)
     #db updating hotel_list in webcraling postgress db
     db_hotel_list_update(hotel_table_list)
 
-if args.scraping_type < 2:   
+elif args.scraping_type < 2:   
     print("type of scraping: hotel_data_update ")
     hotel_data_list=crawler('Aosta',day_in,day_out)
     #db updating hotel_data in webcrawling postgress db
     db_hotel_data_update(hotel_data_list)
 
+elif args.scraping_type == 3:   
+    print("type of scraping: hotel_reviews_update ")
+    hotel_review_list=crawler('Aosta',day_in,day_out)
+    #db updating hotel_reviews in webcrawling postgress db
+    db_hotel_reviews_update(hotel_reviews_list)
 
-
+else:
+    print("chose type of scraping")
 
