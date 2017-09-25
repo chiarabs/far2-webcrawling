@@ -8,9 +8,11 @@ import re
 import psycopg2
 import argparse
 import datetime
+import locale
+locale.setlocale(locale.LC_ALL, 'it_IT.utf8')
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-t", "--scraping_type", action="count", default=0)
+parser.add_argument("-t", "--scraping_type", action="count", default=0,help='select the type of scraping: -t for hotel_list update (get hotel names), -tt for hotel_data update (get hotel_id, price, average rating), -ttt for hotel_reviews update (get users comments) ')
 args = parser.parse_args()
     
 
@@ -48,7 +50,6 @@ def crawler(location,day_in,day_out):
     offset_range=0 
     for i in range(0,2): #set the number of visited pages 
         offset=i*offset_range
-        print(offset)
         url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+dest_id+';ss='+location+';dest_type=city;sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
                 
         print (url)
@@ -65,12 +66,9 @@ def crawler(location,day_in,day_out):
             break
 
         last_show=int(soup.find('span', class_='sr_showed_amount_last').text.strip('\t\r\n'))
-        print(last_show)
         first_show=(soup.find('span' ,class_='sr_showed_amount').text)
         first_show=[int(s) for s in first_show.split() if s.isdigit()][0]
-        print(first_show)
         offset_range=last_show-(first_show-1)
-        print(offset_range)
 
         #loop over hotel  links to get each hotel_soup
         for link in soup.find_all('a',class_='hotel_name_link url'):
@@ -102,8 +100,8 @@ def crawler(location,day_in,day_out):
                 hotel_list.append(hotel_data)
             
             elif args.scraping_type == 3:
-                hotel_review_list=hotel_review_update(headers,soup)
-                hotel_list.append(hotel_review_list)
+                hotel_reviews_list=hotel_reviews_update(headers,soup)
+                hotel_list.append(hotel_reviews_list)
         
     return hotel_list
 
@@ -125,6 +123,8 @@ def hotel_table_update(hotel_link,hotel_soup) :
 
     if hotel_soup.find('h2', class_='hp__hotel-name'):
         hotel_name=hotel_soup.find('h2', class_='hp__hotel-name').text.strip('\t\r\n')
+    elif  hotel_soup.find('span', class_='sr-hotel__name') :
+        hotel_name=hotel_soup.find('span', class_='sr-hotel__name').text.strip('\t\r\n')
     else:
         hotel_name= None
     print(hotel_name)
@@ -176,47 +176,58 @@ def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
 
 ##################################################################################################
 
-def hotel_review_update (headers, hotel_soup) :
+def hotel_reviews_update (headers, hotel_soup) :
     
     class hotel_review(object):
-        def __init__(self,hotel_id,pos_comment,neg_comment,post_date,author):
+        def __init__(self,hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group):
             self.hotel_id=hotel_id
+            self.score=score
             self.pos_comment=pos_comment
             self.neg_comment=neg_comment
             self.post_date=post_date
-            self.author=author
-    hotel_review_list=[]
+            self.author_name=author_name
+            self.autohr_nat=author_nat
+            self.autohr_group=author_group
+    hotel_reviews_list=[]
 
     hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
 
     link_to_rev=hotel_soup.find('a', class_='show_all_reviews_btn')['href']
 
     link_to_rev=base_url+link_to_rev
-    print(link_to_rev)
+    #print(link_to_rev)
 
     for i in range (1,2): #set number of reviews visited pages
 
         #(change N relative of the page during iteration: string-substitution "pageN" with "page"+i+")
         link_to_rev=link_to_rev+';page='+str(i)
 
-        print (link_to_rev)
-
         response = requests.get(link_to_rev,headers=headers).text
         review_soup=bs(response,'lxml')
-
+        for element in review_soup.find_all('span', class_="review-score-badge"):
+            score=element.text.strip('\t\r\n\€xa')
+            score=float(re.sub('[^0-9,]', "", score).replace(",", "."))
         for element in review_soup.find_all('p', class_='review_neg'):
             neg_comment=element.text #to do: remove 눇
-        
+         
         for element in review_soup.find_all('p', class_='review_pos'):
             pos_comment = element.text
-    
-        #post_date = datetime.date(review_soup.find(.......))
+        
+        for element in review_soup.find_all('p', class_='review_item_date'):
+            post_date =  datetime.datetime.strptime(element.text.strip('\t\r\n\€xa'),'%d %B %Y')
+        #print(post_date)
+        
+        for element in review_soup.find_all('div', class_="review_item_reviewer"):
+            author_name=element.h4.text.strip('\t\r\n')
+            author_nat = element.find('span', itemprop="nationality").text.strip('\t\r\n')
+            if element.find('div',class_='user_age_group'):
+                author_group=element.find('div',class_='user_age_group').text.strip('\t\r\n')
+            else:
+                author_group='non defined'
 
-        #author = review_soup.find(.......)
-
-        hotel_review_list.append(hotel_review(hotel_id,pos_comment,neg_comment,post_date,author))
+        hotel_reviews_list.append(hotel_review(hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group))
     
-    return hotel_review_list
+    return hotel_reviews_list
             
 ##################################################################################################
                         
@@ -286,18 +297,21 @@ def  db_hotel_reviews_update(hotel_reviews_list):
 
     for i in hotel_reviews_list:
         hotel_id=i.hotel_id
+        score=i.score
         pos_comment=i.pos_comment
         neg_comment=i.neg_comment
         post_date=i.post_date
-        author=i.author
+        author_name=i.author_name
+        author_nat=i.author_nat
+        author_group=i.author_group
     
         SQL = '''BEGIN;
-                 INSERT INTO hotel_reviews (hotel_id,) 
-	         VALUES (%s,%s,%s,%s,%s,%s) 
+                 INSERT INTO hotel_reviews (hotel_id,score,positive_comment,negative_comment,post_date,author_name,author_nat,author_group) 
+	         VALUES (%s,%s,%s,%s,%s,%s,%s,%s) 
                  ;
                  COMMIT;'''
-############### TO COMPLETEEEEEEE
-        data = (hotel_id,day_in,day_out,price,av_rating,search_date )
+
+        data = (hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
 
         cur.execute(SQL, data)
 
@@ -306,8 +320,8 @@ def  db_hotel_reviews_update(hotel_reviews_list):
 
 ####################################################################################
 #research_options
-day_in_str='2017-09-23'
-day_out_str='2017-09-24'
+day_in_str='2017-09-26'
+day_out_str='2017-09-27'
 
 
 
@@ -328,7 +342,7 @@ elif args.scraping_type < 2:
 
 elif args.scraping_type == 3:   
     print("type of scraping: hotel_reviews_update ")
-    hotel_review_list=crawler('Aosta',day_in,day_out)
+    hotel_reviews_list=crawler('Aosta',day_in,day_out)
     #db updating hotel_reviews in webcrawling postgress db
     db_hotel_reviews_update(hotel_reviews_list)
 
