@@ -20,13 +20,19 @@ args = parser.parse_args()
 base_url='http://www.booking.com'
 
 def crawler(location,day_in,day_out):
-
-#for the specific location,day_in(yyy-mm-dd),day_out(yyyy-mm-dd) return a list of class object
     
-    dest_id='-110502'
-    region_id='913'
-
     type_of_location='city'     #set = 'city' or 'region'
+
+    #look for id_location in db_locations: if it is present get id_loc else ask to search id_loc to insert in db_locations
+    dest_id=id_db_locations(location,type_of_location)
+    
+    print(dest_id)
+    #for the specific location,day_in(yyy-mm-dd),day_out(yyyy-mm-dd) return a list of class object
+    
+    #dest_id=-110502
+  
+
+  
     
     monthday_in=day_in.day
     month_in=day_in.month
@@ -56,11 +62,11 @@ def crawler(location,day_in,day_out):
         offset=i*offset_range
 
         if type_of_location=='city':
-            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+dest_id+';ss='+location+';dest_type=city;sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
+            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+str(dest_id)+';ss='+location+';dest_type=city;sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
         elif type_of_location=='region':
-            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+dest_id+';region='+region_id+';sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
+            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+dest_id+';region='+str(dest_id)+';sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
         else:
-            print('verify location')
+            print('verify type_of_location: city or region admitted')
             return
         print (url)
 
@@ -230,7 +236,6 @@ def hotel_reviews_update (headers, hotel_soup) :
                         neg_comment.append(element.find('p', class_='review_neg').text) #to do: remove 눇
                     else:
                         neg_comment.append('empty')
-                    print(neg_comment)
                     if element.find('p', class_='review_pos'):
                         pos_comment.append(element.find('p', class_='review_pos').text)
                     else:
@@ -238,7 +243,6 @@ def hotel_reviews_update (headers, hotel_soup) :
         
             for element in review_soup.find_all('p', class_='review_item_date'):
                 post_date.append( datetime.datetime.strptime(element.text.strip('\t\r\n\€xa'),'%d %B %Y'))
-            print(post_date)
         
             for element in review_soup.find_all('div', class_="review_item_reviewer"):
                 author_name.append(element.h4.text.strip('\t\r\n'))
@@ -249,13 +253,11 @@ def hotel_reviews_update (headers, hotel_soup) :
                 if element.find('div',class_='user_age_group'):
                     author_group.append(element.find('div',class_='user_age_group').text.strip('\t\r\n'))
                 else:
-                    author_group.append('non defined')
+                    author_group.append('unknown')
                 
         hotel_review=hotel_review(hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
     else:
         hotel_review=hotel_review(hotel_id,'empty','empty','empty','empty','empty','empty','empty')
-
-    #hotel_reviews_list.append(hotel_review)
     
     return hotel_review
             
@@ -350,6 +352,50 @@ def  db_hotel_reviews_update(hotel_reviews_list):
     conn.close()
 
 ####################################################################################
+
+def id_db_locations(loc_name,loc_type) :
+     
+    conn=psycopg2.connect('dbname=webcrawling user=chiara')
+
+    cur=conn.cursor()
+
+    SQL = 'SELECT id_loc FROM locations WHERE city=(%s) OR region=(%s);'
+    data= (loc_name,loc_name)
+
+    cur.execute(SQL,data)
+    #print(cur.rowcount)
+    if cur.rowcount==0:
+        new_id=input('please, search dest_id or region_id')
+        if loc_type=='city': 
+            SQL = '''BEGIN;
+             INSERT INTO locations (id_loc,city)
+	     SELECT %s,%s
+	     WHERE NOT EXISTS (
+	     SELECT * FROM locations WHERE id_loc=%s OR city=%s
+	     );
+             COMMIT;'''
+        else:
+            SQL = '''BEGIN;
+             INSERT INTO locations (id_loc,region)
+	     SELECT %s,%s
+	     WHERE NOT EXISTS (
+	     SELECT * FROM locations WHERE id_loc=%s OR region=%s
+	     );
+             COMMIT;'''
+
+        data = (new_id,loc_name,new_id,loc_name)
+
+        cur.execute(SQL, data)
+        return new_id
+    else:
+        return (cur.fetchone())[0]
+
+    cur.close()
+    conn.close()
+    
+ 
+####################################################################################
+
 #research_options
 day_in_str='2017-09-26'
 day_out_str='2017-09-27'
