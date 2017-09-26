@@ -24,6 +24,9 @@ def crawler(location,day_in,day_out):
 #for the specific location,day_in(yyy-mm-dd),day_out(yyyy-mm-dd) return a list of class object
     
     dest_id='-110502'
+    region_id='913'
+
+    type_of_location='city'     #set = 'city' or 'region'
     
     monthday_in=day_in.day
     month_in=day_in.month
@@ -48,10 +51,17 @@ def crawler(location,day_in,day_out):
     #loop  over all the pages containing research results iterating on the URL offset parameter
     #loop  stops when it finds error message "take control of your search"
     offset_range=0 
-    for i in range(0,2): #set the number of visited pages 
+    for i in range(0,1): #set the number of visited pages 
+
         offset=i*offset_range
-        url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+dest_id+';ss='+location+';dest_type=city;sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
-                
+
+        if type_of_location=='city':
+            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+dest_id+';ss='+location+';dest_type=city;sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
+        elif type_of_location=='region':
+            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+dest_id+';region='+region_id+';sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
+        else:
+            print('verify location')
+            return
         print (url)
 
         try:
@@ -74,7 +84,7 @@ def crawler(location,day_in,day_out):
         for link in soup.find_all('a',class_='hotel_name_link url'):
             hotel_link=link['href']
             hotel_link=base_url+hotel_link
-            #print(hotel_link)
+            print(hotel_link)
             try:
                 response = requests.get(url, headers=headers)
             except requests.exceptions.RequestException as e:  
@@ -90,18 +100,18 @@ def crawler(location,day_in,day_out):
 
     
 
-            if args.scraping_type == 2:
+            if args.scraping_type < 2:
                 hotel_table=hotel_table_update(hotel_link,soup)
                 hotel_list.append(hotel_table)
             
  
-            elif args.scraping_type < 2:   
+            elif args.scraping_type == 2:   
                 hotel_data=hotel_data_update(day_in,day_out,hotel_link,soup)
                 hotel_list.append(hotel_data)
             
             elif args.scraping_type == 3:
-                hotel_reviews_list=hotel_reviews_update(headers,soup)
-                hotel_list.append(hotel_reviews_list)
+                hotel_reviews=hotel_reviews_update(headers,soup)
+                hotel_list.append(hotel_reviews)
         
     return hotel_list
 
@@ -186,48 +196,68 @@ def hotel_reviews_update (headers, hotel_soup) :
             self.neg_comment=neg_comment
             self.post_date=post_date
             self.author_name=author_name
-            self.autohr_nat=author_nat
-            self.autohr_group=author_group
-    hotel_reviews_list=[]
+            self.author_nat=author_nat
+            self.author_group=author_group
+
+  
+    score=[]
+    pos_comment=[]
+    neg_comment=[]
+    post_date=[]
+    author_name=[]
+    author_nat=[]
+    author_group=[]
 
     hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
+    print(hotel_id)
 
-    link_to_rev=hotel_soup.find('a', class_='show_all_reviews_btn')['href']
+    if hotel_soup.find('a', class_='show_all_reviews_btn'):
+        link_to_rev=hotel_soup.find('a', class_='show_all_reviews_btn')['href']
+     
+        link_to_rev=base_url+link_to_rev
+        print(link_to_rev)
 
-    link_to_rev=base_url+link_to_rev
-    #print(link_to_rev)
+        for i in range (1,2): #set number of reviews visited pages
 
-    for i in range (1,2): #set number of reviews visited pages
+            link_to_rev=link_to_rev+';page='+str(i)
 
-        #(change N relative of the page during iteration: string-substitution "pageN" with "page"+i+")
-        link_to_rev=link_to_rev+';page='+str(i)
-
-        response = requests.get(link_to_rev,headers=headers).text
-        review_soup=bs(response,'lxml')
-        for element in review_soup.find_all('span', class_="review-score-badge"):
-            score=element.text.strip('\t\r\n\€xa')
-            score=float(re.sub('[^0-9,]', "", score).replace(",", "."))
-        for element in review_soup.find_all('p', class_='review_neg'):
-            neg_comment=element.text #to do: remove 눇
-         
-        for element in review_soup.find_all('p', class_='review_pos'):
-            pos_comment = element.text
+            response = requests.get(link_to_rev,headers=headers).text
+            review_soup=bs(response,'lxml')
+            for element in review_soup.find_all('div', class_='review_item_review_container'):
+                    single_score=element.find('span', class_="review-score-badge").text.strip('\t\r\n\€xa')
+                    score.append(float(re.sub('[^0-9,]', "",single_score).replace(",", ".")))
+                    if element.find('p', class_='review_neg'):
+                        neg_comment.append(element.find('p', class_='review_neg').text) #to do: remove 눇
+                    else:
+                        neg_comment.append('empty')
+                    print(neg_comment)
+                    if element.find('p', class_='review_pos'):
+                        pos_comment.append(element.find('p', class_='review_pos').text)
+                    else:
+                        pos_comment.append('empty')
         
-        for element in review_soup.find_all('p', class_='review_item_date'):
-            post_date =  datetime.datetime.strptime(element.text.strip('\t\r\n\€xa'),'%d %B %Y')
-        #print(post_date)
+            for element in review_soup.find_all('p', class_='review_item_date'):
+                post_date.append( datetime.datetime.strptime(element.text.strip('\t\r\n\€xa'),'%d %B %Y'))
+            print(post_date)
         
-        for element in review_soup.find_all('div', class_="review_item_reviewer"):
-            author_name=element.h4.text.strip('\t\r\n')
-            author_nat = element.find('span', itemprop="nationality").text.strip('\t\r\n')
-            if element.find('div',class_='user_age_group'):
-                author_group=element.find('div',class_='user_age_group').text.strip('\t\r\n')
-            else:
-                author_group='non defined'
+            for element in review_soup.find_all('div', class_="review_item_reviewer"):
+                author_name.append(element.h4.text.strip('\t\r\n'))
+                if element.find('span', itemprop="nationality"):
+                    author_nat.append(element.find('span', itemprop="nationality").text.strip('\t\r\n'))
+                else:
+                    author_nat.append('unknown')
+                if element.find('div',class_='user_age_group'):
+                    author_group.append(element.find('div',class_='user_age_group').text.strip('\t\r\n'))
+                else:
+                    author_group.append('non defined')
+                
+        hotel_review=hotel_review(hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
+    else:
+        hotel_review=hotel_review(hotel_id,'empty','empty','empty','empty','empty','empty','empty')
 
-        hotel_reviews_list.append(hotel_review(hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group))
+    #hotel_reviews_list.append(hotel_review)
     
-    return hotel_reviews_list
+    return hotel_review
             
 ##################################################################################################
                         
@@ -296,24 +326,25 @@ def  db_hotel_reviews_update(hotel_reviews_list):
     cur=conn.cursor()
 
     for i in hotel_reviews_list:
-        hotel_id=i.hotel_id
-        score=i.score
-        pos_comment=i.pos_comment
-        neg_comment=i.neg_comment
-        post_date=i.post_date
-        author_name=i.author_name
-        author_nat=i.author_nat
-        author_group=i.author_group
+        for j in range(0,len(i.pos_comment)):
+            hotel_id=i.hotel_id
+            score=i.score[j]
+            pos_comment=i.pos_comment[j]
+            neg_comment=i.neg_comment[j]
+            post_date=i.post_date[j]
+            author_name=i.author_name[j]
+            author_nat=i.author_nat[j]
+            author_group=i.author_group[j]
     
-        SQL = '''BEGIN;
+            SQL = '''BEGIN;
                  INSERT INTO hotel_reviews (hotel_id,score,positive_comment,negative_comment,post_date,author_name,author_nat,author_group) 
 	         VALUES (%s,%s,%s,%s,%s,%s,%s,%s) 
                  ;
                  COMMIT;'''
 
-        data = (hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
+            data = (hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
 
-        cur.execute(SQL, data)
+            cur.execute(SQL, data)
 
     cur.close()
     conn.close()
@@ -328,13 +359,13 @@ day_out_str='2017-09-27'
 day_in = datetime.datetime.strptime(day_in_str,'%Y-%m-%d')
 day_out= datetime.datetime.strptime(day_out_str, '%Y-%m-%d')
 
-if args.scraping_type == 2:
+if args.scraping_type < 2:
     print("type of scraping: hotel_table_update")
     hotel_table_list=crawler('Aosta',day_in,day_out)
     #db updating hotel_list in webcraling postgress db
     db_hotel_list_update(hotel_table_list)
 
-elif args.scraping_type < 2:   
+elif args.scraping_type == 2:   
     print("type of scraping: hotel_data_update ")
     hotel_data_list=crawler('Aosta',day_in,day_out)
     #db updating hotel_data in webcrawling postgress db
