@@ -19,9 +19,8 @@ args = parser.parse_args()
 
 base_url='http://www.booking.com'
 
-def crawler(location,day_in,day_out):
+def crawler(type_of_location,location,day_in,day_out):
     
-    type_of_location='city'     #set = 'city' or 'region'
 
     #look for id_location in db_locations: if it is present get id_loc else ask to search id_loc to insert in db_locations
     dest_id=id_db_locations(location,type_of_location)
@@ -56,15 +55,15 @@ def crawler(location,day_in,day_out):
   
     #loop  over all the pages containing research results iterating on the URL offset parameter
     #loop  stops when it finds error message "take control of your search"
-    offset_range=0 
-    for i in range(0,1): #set the number of visited pages 
+    offset_range=15 
+    for i in range(2,5): #set the number of visited pages 
 
         offset=i*offset_range
 
         if type_of_location=='city':
-            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+str(dest_id)+';ss='+location+';dest_type=city;sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
+            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+str(dest_id)+';dest_type=city;sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
         elif type_of_location=='region':
-            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+dest_id+';region='+str(dest_id)+';sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
+            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';region='+str(dest_id)+';sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
         else:
             print('verify type_of_location: city or region admitted')
             return
@@ -78,13 +77,19 @@ def crawler(location,day_in,day_out):
         
         response = requests.get(url,headers=headers).text
         soup = bs(response,'lxml')
+
         if soup.get('class') == 'Take Control of Your Search':
             break
+        if soup.get('class') == 'trclassack_broaden_search':
+            break
 
-        last_show=int(soup.find('span', class_='sr_showed_amount_last').text.strip('\t\r\n'))
-        first_show=(soup.find('span' ,class_='sr_showed_amount').text)
-        first_show=[int(s) for s in first_show.split() if s.isdigit()][0]
-        offset_range=last_show-(first_show-1)
+        try:
+            last_show=int(soup.find('span', class_='sr_showed_amount_last').text.strip('\t\r\n'))
+            first_show=(soup.find('span' ,class_='sr_showed_amount').text)
+            first_show=[int(s) for s in first_show.split() if s.isdigit()][0]
+            offset_range=last_show-(first_show-1)
+        except:
+            offset_range=15
 
         #loop over hotel  links to get each hotel_soup
         for link in soup.find_all('a',class_='hotel_name_link url'):
@@ -359,31 +364,22 @@ def id_db_locations(loc_name,loc_type) :
 
     cur=conn.cursor()
 
-    SQL = 'SELECT id_loc FROM locations WHERE city=(%s) OR region=(%s);'
-    data= (loc_name,loc_name)
+    SQL = 'SELECT id_loc FROM locations WHERE loc_name=%s;'
+    data= (loc_name,)
 
     cur.execute(SQL,data)
     #print(cur.rowcount)
     if cur.rowcount==0:
-        new_id=input('please, search dest_id or region_id')
-        if loc_type=='city': 
-            SQL = '''BEGIN;
-             INSERT INTO locations (id_loc,city)
-	     SELECT %s,%s
+        new_id=input('Please, verify location spelling or insert dest_id or region_id: ')
+        SQL = '''BEGIN;
+             INSERT INTO locations (id_loc,loc_name,loc_type)
+	     SELECT %s,%s,%s
 	     WHERE NOT EXISTS (
-	     SELECT * FROM locations WHERE id_loc=%s OR city=%s
-	     );
-             COMMIT;'''
-        else:
-            SQL = '''BEGIN;
-             INSERT INTO locations (id_loc,region)
-	     SELECT %s,%s
-	     WHERE NOT EXISTS (
-	     SELECT * FROM locations WHERE id_loc=%s OR region=%s
+	     SELECT * FROM locations WHERE id_loc=%s OR loc_name=%s
 	     );
              COMMIT;'''
 
-        data = (new_id,loc_name,new_id,loc_name)
+        data = (new_id,loc_name,loc_type,new_id,loc_name)
 
         cur.execute(SQL, data)
         return new_id
@@ -397,32 +393,33 @@ def id_db_locations(loc_name,loc_type) :
 ####################################################################################
 
 #research_options
-day_in_str='2017-09-26'
-day_out_str='2017-09-27'
+day_in_str='2017-09-27'
+day_out_str='2017-09-28'
 
-
+type_of_location='city'     #set = 'city' or 'region'
+location='Chatillon'
 
 day_in = datetime.datetime.strptime(day_in_str,'%Y-%m-%d')
 day_out= datetime.datetime.strptime(day_out_str, '%Y-%m-%d')
 
-if args.scraping_type < 2:
+if args.scraping_type == 1:
     print("type of scraping: hotel_table_update")
-    hotel_table_list=crawler('Aosta',day_in,day_out)
+    hotel_table_list=crawler(type_of_location,location,day_in,day_out)
     #db updating hotel_list in webcraling postgress db
     db_hotel_list_update(hotel_table_list)
 
 elif args.scraping_type == 2:   
     print("type of scraping: hotel_data_update ")
-    hotel_data_list=crawler('Aosta',day_in,day_out)
+    hotel_data_list=crawler(type_of_location,location,day_in,day_out)
     #db updating hotel_data in webcrawling postgress db
     db_hotel_data_update(hotel_data_list)
 
 elif args.scraping_type == 3:   
     print("type of scraping: hotel_reviews_update ")
-    hotel_reviews_list=crawler('Aosta',day_in,day_out)
+    hotel_reviews_list=crawler(type_of_location,location,day_in,day_out)
     #db updating hotel_reviews in webcrawling postgress db
     db_hotel_reviews_update(hotel_reviews_list)
 
 else:
-    print("chose type of scraping")
+    print("chose type of scraping, -h for help")
 
