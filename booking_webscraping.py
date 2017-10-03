@@ -8,6 +8,7 @@ import re
 import psycopg2
 import argparse
 import datetime
+from time import time
 import locale
 locale.setlocale(locale.LC_ALL, 'it_IT.utf8')
 
@@ -20,7 +21,7 @@ args = parser.parse_args()
 base_url='http://www.booking.com'
 
 def crawler(type_of_location,location,day_in,day_out):
-    
+    ti=time()
 
     #look for id_location in db_locations: if it is present get id_loc else ask to search id_loc to insert in db_locations
     dest_id=id_db_locations(location,type_of_location)
@@ -57,13 +58,14 @@ def crawler(type_of_location,location,day_in,day_out):
     #loop  stops when it finds error message "take control of your search"
     offset_range=15 
     for i in range(2,5): #set the number of visited pages 
-
+        print(i)
         offset=i*offset_range
+        print(offset_range)
 
         if type_of_location=='city':
-            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+str(dest_id)+';dest_type=city;sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
+            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+str(dest_id)+';dest_type=city;sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;rows=15;offset='+str(offset)
         elif type_of_location=='region':
-            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';region='+str(dest_id)+';sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;offset='+str(offset)
+            url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';region='+str(dest_id)+';sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;rows=15;offset='+str(offset)
         else:
             print('verify type_of_location: city or region admitted')
             return
@@ -79,23 +81,35 @@ def crawler(type_of_location,location,day_in,day_out):
         soup = bs(response,'lxml')
 
         if soup.get('class') == 'Take Control of Your Search':
+            print('scraping end in %0.3fs' % (time() - ti))
             break
         if soup.get('class') == 'trclassack_broaden_search':
+            print('scraping end in done in %0.3fs' % (time() - ti))
             break
 
         try:
             last_show=int(soup.find('span', class_='sr_showed_amount_last').text.strip('\t\r\n'))
             first_show=(soup.find('span' ,class_='sr_showed_amount').text)
             first_show=[int(s) for s in first_show.split() if s.isdigit()][0]
-            offset_range=last_show-(first_show-1)
+            diff_pg=last_show-(first_show-1)
+            if diff_pg<0:
+                print('offset out of range:serch end')
+                break
         except:
             offset_range=15
-
+        
+        
         #loop over hotel  links to get each hotel_soup
         for link in soup.find_all('a',class_='hotel_name_link url'):
             hotel_link=link['href']
             hotel_link=base_url+hotel_link
             print(hotel_link)
+
+            if  link.find('span',class_='sr-hotel__type'):
+                hotel_type=link.find('span', class_='sr-hotel__type').text
+            else:
+                hotel_type=None
+
             try:
                 response = requests.get(url, headers=headers)
             except requests.exceptions.RequestException as e:  
@@ -112,7 +126,7 @@ def crawler(type_of_location,location,day_in,day_out):
     
 
             if args.scraping_type < 2:
-                hotel_table=hotel_table_update(hotel_link,soup)
+                hotel_table=hotel_table_update(hotel_link,hotel_type,soup)
                 hotel_list.append(hotel_table)
             
  
@@ -123,23 +137,29 @@ def crawler(type_of_location,location,day_in,day_out):
             elif args.scraping_type == 3:
                 hotel_reviews=hotel_reviews_update(headers,soup)
                 hotel_list.append(hotel_reviews)
-        
+
+    print("scraping done in %0.3fs" % (time() - ti))
     return hotel_list
 
 ##################################################################################################
 
-def hotel_table_update(hotel_link,hotel_soup) :
+def hotel_table_update(hotel_link,hotel_type,hotel_soup) :
 #find hotel destination id,name,address  
 
     class hotel_table(object):
-        def __init__(self,hotel_id,name,address,dest_id): 
+        def __init__(self,hotel_id,hotel_type,hotel_name,hotel_address,dest_id,hotel_star,hotel_facilities): 
             self.hotel_id=hotel_id
-            self.name = name
-            self.address=address
+            self.hotel_type=hotel_type
+            self.hotel_name = hotel_name
+            self.hotel_address=hotel_address
             self.dest_id=dest_id
-
+            self.hotel_star=hotel_star
+            self.hotel_facilities=hotel_facilities
+           
+    t0 = time()
     hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
-               
+    print(hotel_id)
+    print(hotel_type)           
     dest_id=int(hotel_link[hotel_link.find('dest_id=')+len('dest_id='):hotel_link.rfind(';srfid')])
 
     if hotel_soup.find('h2', class_='hp__hotel-name'):
@@ -156,7 +176,24 @@ def hotel_table_update(hotel_link,hotel_soup) :
         hotel_address=None
     print(hotel_address)
 
-    return hotel_table(hotel_id,hotel_name,hotel_address,dest_id)
+    if hotel_soup.find('span', class_='hp__hotel_ratings__stars').find('span', class_='invisible_spoken'):
+        hotel_star=hotel_soup.find('span', class_='hp__hotel_ratings__stars').find('span', class_='invisible_spoken').text
+        hotel_star=int(re.sub('[^0-9,]', "", hotel_star))
+    else:
+        hotel_star=None
+    print(hotel_star)
+
+    hotel_facilities=[]
+    facilities_list=hotel_soup.find('div', class_='facilitiesChecklist')
+    for el in facilities_list.find_all('li'):
+        try:
+            hotel_facilities.append(el['data-name-en'])
+        except KeyError:
+            continue
+    
+
+    print("done in %0.3fs" % (time() - t0))
+    return hotel_table(hotel_id,hotel_type,hotel_name,hotel_address,dest_id,hotel_star,hotel_facilities)
 
      
 
@@ -165,14 +202,17 @@ def hotel_table_update(hotel_link,hotel_soup) :
 def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
 
     class hotel_data(object):
-        def __init__(self,hotel_id,day_in,day_out,price,av_rating):
+        def __init__(self,hotel_id,day_in,day_out,price,av_rating,hotel_star,room_type):
             self.hotel_id=hotel_id
             self.day_in=day_in
             self.day_out=day_out
             self.price=price
             self.av_rating=av_rating
             self.search_date=(datetime.datetime.now())
-
+            self.hotel_star=hotel_star
+            self.room_type=room_type
+            
+    t0 = time()
     hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
 
     av_rating=hotel_soup.find('span', class_='review-score-badge').text.strip('\t\r\n')
@@ -191,9 +231,12 @@ def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
         text_file.write(str(hotel_soup))
         text_file.close()
         price= None
-    print(price)       
-    
-    return hotel_data(hotel_id,day_in,day_out,price,av_rating)
+    print(price)   
+
+    print(room_type)
+    print(hotel_star)
+    print("done in %0.3fs" % (time() - t0))
+    return hotel_data(hotel_id,day_in,day_out,price,av_rating,hotel_star,room_type)
 
 ##################################################################################################
 
@@ -210,7 +253,8 @@ def hotel_reviews_update (headers, hotel_soup) :
             self.author_nat=author_nat
             self.author_group=author_group
 
-  
+    t0 = time()
+            
     score=[]
     pos_comment=[]
     neg_comment=[]
@@ -263,7 +307,7 @@ def hotel_reviews_update (headers, hotel_soup) :
         hotel_review=hotel_review(hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
     else:
         hotel_review=hotel_review(hotel_id,'empty','empty','empty','empty','empty','empty','empty')
-    
+    print("done in %0.3fs" % (time() - t0))
     return hotel_review
             
 ##################################################################################################
@@ -277,18 +321,22 @@ def db_hotel_list_update(hotel_table_list) :
     
     for i in hotel_table_list:
         hotel_id=i.hotel_id
-        name=i.name
-        hotel_address=i.address
+        hotel_name=i.hotel_name
+        hotel_address=i.hotel_address
         location=i.dest_id
+        hotel_type=i.hotel_type
+        hotel_star=i.hotel_star
+        hotel_facilities=i.hotel_facilities
+    
 
         SQL = '''BEGIN;
-                 INSERT INTO hotel_list (name,location,hotel_address,hotel_id)
-	         SELECT %s,%s,%s,%s
+                 INSERT INTO hotel_list (hotel_name,location,hotel_address,hotel_id,hotel_type,hotel_star,hotel_facilities)
+	         SELECT %s,%s,%s,%s,%s,%s,%s
 	         WHERE NOT EXISTS (SELECT hotel_id  FROM hotel_list WHERE hotel_id=%s
 	         );
                  COMMIT;'''
 
-        data = (name,location,hotel_address,hotel_id,hotel_id)
+        data = (hotel_name,location,hotel_address,hotel_id,hotel_type,hotel_star,hotel_facilities,hotel_id)
 
         cur.execute(SQL, data)
 
@@ -391,13 +439,13 @@ def id_db_locations(loc_name,loc_type) :
     
  
 ####################################################################################
-
+start=time()
 #research_options
 day_in_str='2017-09-27'
 day_out_str='2017-09-28'
 
 type_of_location='city'     #set = 'city' or 'region'
-location='Chatillon'
+location='Cogne'
 
 day_in = datetime.datetime.strptime(day_in_str,'%Y-%m-%d')
 day_out= datetime.datetime.strptime(day_out_str, '%Y-%m-%d')
@@ -423,3 +471,4 @@ elif args.scraping_type == 3:
 else:
     print("chose type of scraping, -h for help")
 
+print("scraping and db updating done in %0.3fs" % (time() - start))
