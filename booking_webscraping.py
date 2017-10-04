@@ -57,7 +57,7 @@ def crawler(type_of_location,location,day_in,day_out):
     #loop  over all the pages containing research results iterating on the URL offset parameter
     #loop  stops when it finds error message "take control of your search"
     offset_range=15 
-    for i in range(2,5): #set the number of visited pages 
+    for i in range(0,1): #set the number of visited pages 
         print(i)
         offset=i*offset_range
         print(offset_range)
@@ -132,7 +132,10 @@ def crawler(type_of_location,location,day_in,day_out):
  
             elif args.scraping_type == 2:   
                 hotel_data=hotel_data_update(day_in,day_out,hotel_link,soup)
-                hotel_list.append(hotel_data)
+                if hotel_data is not None:
+                    hotel_list.append(hotel_data)
+                else:
+                    continue
             
             elif args.scraping_type == 3:
                 hotel_reviews=hotel_reviews_update(headers,soup)
@@ -202,42 +205,128 @@ def hotel_table_update(hotel_link,hotel_type,hotel_soup) :
 def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
 
     class hotel_data(object):
-        def __init__(self,hotel_id,day_in,day_out,price,av_rating,hotel_star,room_type):
+        def __init__(self,hotel_id,day_in,day_out,price,av_rating,room_type,room_size,breakfast_opt,policy_opt,room_left,room_facilities):
             self.hotel_id=hotel_id
             self.day_in=day_in
             self.day_out=day_out
             self.price=price
             self.av_rating=av_rating
             self.search_date=(datetime.datetime.now())
-            self.hotel_star=hotel_star
             self.room_type=room_type
+            self.room_size=room_size
+            self.breakfast_opt=breakfast_opt
+            self.policy_opt=policy_opt
+            self.room_left=room_left
+            self.room_facilities=room_facilities
+          
             
     t0 = time()
+
     hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
 
-    av_rating=hotel_soup.find('span', class_='review-score-badge').text.strip('\t\r\n')
-    av_rating=float(re.sub('[^0-9,]', "", av_rating).replace(",", "."))
-    print(av_rating)
-    if hotel_soup.select_one('strong.js-track-hp-rt-room-price'):
-        price=hotel_soup.select_one('strong.js-track-hp-rt-room-price') 
-        price = price.text.strip('\t\r\n\€xa')
-        price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
-    elif hotel_soup.find('span', class_='hprt-price-price-standard'):
-         price=hotel_soup.find('span', class_='hprt-price-price-standard')
-         price = price.text.strip('\t\r\n\€xa')
-         price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
-    else :
-        text_file = open("soup_error_price.txt", "w")
-        text_file.write(str(hotel_soup))
-        text_file.close()
-        price= None
-    print(price)   
+    if hotel_soup.find('span', class_='review-score-badge'):
+        av_rating=hotel_soup.find('span', class_='review-score-badge').text.strip('\t\r\n')
+        av_rating=float(re.sub('[^0-9,]', "", av_rating).replace(",", "."))
+    else:
+        av_rating=None
+    #print(av_rating)
+    
+    price=[]
+    room_type=[]
+    room_size=[]
+    room_left=[]
+    room_facilities=[]
+    room_facilities_=[]
+    breakfast_opt=[]
+    policy_opt=[]
+    policy_opt_=[]
+    max_occ=[]
+    if hotel_soup.find(id='room_availability_container'):
+        room_availability_container= hotel_soup.find(id='room_availability_container')
 
-    print(room_type)
-    print(hotel_star)
-    print("done in %0.3fs" % (time() - t0))
-    return hotel_data(hotel_id,day_in,day_out,price,av_rating,hotel_star,room_type)
+        for tr in room_availability_container.find_all('tr', class_=re.compile("^room_loop.*maintr $")):
+        #loop on room to get for each one: room_type, room_size,list of breakfast_options, list of policy_options, max_occ(occupancy),list of facilities
+            room_id=tr.select_one('div.rt-room-info')['id']
 
+            if tr.select_one('a.jqrt'):
+                room_type.append(tr.select_one('a.jqrt')['data-room-name-en'])
+            else:
+                room_type.append(None)
+
+            facility=tr.select_one('div.rt-all-facilities-hidden')
+            for el in facility.select('span'):
+                try:
+                    room_facilities_.append(el['data-name-en'])
+                except KeyError:
+                    continue
+            room_facilities.append(str(room_facilities_))
+
+            text_file = open("soup_tr.html", "w")
+            text_file.write(str(tr))
+            text_file.close()
+
+            tr1=room_availability_container.find('tr',{'id':re.compile("^%s"%room_id)})
+            if tr1.select_one('strong.js-track-hp-rt-room-price'):
+                price_=tr1.select_one('strong.js-track-hp-rt-room-price') 
+                price_= price_.text.strip('\t\r\n\€xa')
+                price.append(float(re.sub('[^0-9,]', "", price_).replace(",", ".")))
+            elif tr1.find('span', class_='hprt-price-price-standard'):
+                price_=tr1.find('span', class_='hprt-price-price-standard')
+                price_= price_.text.strip('\t\r\n\€xa')
+                price.append(float(re.sub('[^0-9,]', "", price_).replace(",", ".")))
+            else :
+                text_file = open("soup_error_price.txt", "w")
+                text_file.write(str(hotel_soup))
+                text_file.close()
+                continue
+           
+            
+            if tr.select_one('span.info'):
+                room_size_=tr.select_one('span.info').text
+                room_size.append(re.sub('[^0-9,]', "", room_size_))
+            elif tr.select_one('div.info'):
+                room_size_=tr.select_one('div.info').text
+                room_size.append(re.sub('[^0-9,]', "", room_size_))
+            else:
+                room_size.append(None)
+           
+            for el in tr.select('ul.hp-rt__policy__list'):
+                print(el)
+                policy_opt_=el.text
+            print(policy_opt_)
+            #policy_opt.append(policy_opt_[1:])
+            #breakfast_opt.append(policy_opt_[0])
+           
+
+            try :
+                max_occ_=tr['data-occupancy']
+    
+            except KeyError:
+                continue
+            max_occ.append(max_occ_)
+            
+            try:
+                room_left_=tr.select_one('span.only_x_left').text
+                room_left_=re.sub('[^0-9,]', "", room_left)
+            except:
+                room_left_=None
+            room_left.append(room_left)
+            
+            
+        print('price: ',price)
+        print('room size: ',room_size)
+        print ('room type: ',room_type)
+        print('breakfast options: ',breakfast_opt)
+        print('policy_opt: ',policy_opt)
+        print('max occ: ',max_occ)
+        print('room left: ',room_left)
+        print('room facilities: ',room_facilities[0])
+        print("done in %0.3fs" % (time() - t0))
+        return hotel_data(hotel_id,day_in,day_out,price,av_rating,room_type,room_size,breakfast_opt,policy_opt,room_left,room_facilities)
+    else:
+        print('no available rooms')
+        return None
+    
 ##################################################################################################
 
 def hotel_reviews_update (headers, hotel_soup) :
@@ -343,6 +432,8 @@ def db_hotel_list_update(hotel_table_list) :
     cur.close()
     conn.close()
 
+###########################################################################################
+
 def db_hotel_data_update(hotel_data_list) :
     #connect to database "webcrawling", insert new row data in hotel_data table
     
@@ -351,20 +442,28 @@ def db_hotel_data_update(hotel_data_list) :
     cur=conn.cursor()
 
     for i in hotel_data_list:
-        hotel_id=i.hotel_id
-        day_in=i.day_in
-        day_out=i.day_out
-        price=i.price
-        av_rating=i.av_rating
-        search_date=i.search_date
+        n_room=len(i.price)
+        for j in range(0,n_room):
+            hotel_id=i.hotel_id
+            day_in=i.day_in
+            day_out=i.day_out
+            price=i.price[j]
+            av_rating=i.av_rating
+            search_date=i.search_date
+            room_type=i.room_type[j]
+            room_size=i.room_size[j]
+            breakfast_opt=i.breakfast_opt[j]
+            policy_opt=i.policy_opt[j]
+            room_left=i.room_left[j]
+            room_facilities=i.room_facilities[j]
     
         SQL = '''BEGIN;
-                 INSERT INTO hotel_data (hotel_id,day_in,day_out,price,av_rating,search_date)
-	         VALUES (%s,%s,%s,%s,%s,%s) 
+                 INSERT INTO hotel_data (hotel_id,day_in,day_out,price,av_rating,search_date,room_type,room_size,breakfast_opt,policy_opt,room_left,room_facilities)
+	         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) 
                  ;
                  COMMIT;'''
 
-        data = (hotel_id,day_in,day_out,price,av_rating,search_date )
+        data = (hotel_id,day_in,day_out,price,av_rating,search_date,room_type,room_size,breakfast_opt,policy_opt,room_left,room_facilites)
 
         cur.execute(SQL, data)
 
@@ -441,11 +540,11 @@ def id_db_locations(loc_name,loc_type) :
 ####################################################################################
 start=time()
 #research_options
-day_in_str='2017-09-27'
-day_out_str='2017-09-28'
+day_in_str='2017-12-27'
+day_out_str='2017-12-28'
 
 type_of_location='city'     #set = 'city' or 'region'
-location='Cogne'
+location='Chatillon'
 
 day_in = datetime.datetime.strptime(day_in_str,'%Y-%m-%d')
 day_out= datetime.datetime.strptime(day_out_str, '%Y-%m-%d')
