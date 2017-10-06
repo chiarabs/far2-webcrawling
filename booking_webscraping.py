@@ -13,7 +13,7 @@ import locale
 locale.setlocale(locale.LC_ALL, 'it_IT.utf8')
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-t", "--scraping_type", action="count", default=0,help='select the type of scraping: -t for hotel_list update (get hotel names), -tt for hotel_data update (get hotel_id, price, average rating), -ttt for hotel_reviews update (get users comments) ')
+parser.add_argument("-t", "--scraping_type", action="count", default=0,help='select the type of scraping: -t for hotel_list update (get hotel names), -tt for hotel_data update (get hotel_id, price, average rating), -ttt for hotel_ratings update, -tttt fot hotel_reviews update (get users comments) ')
 args = parser.parse_args()
     
 
@@ -31,9 +31,6 @@ def crawler(type_of_location,location,day_in,day_out):
     
     #dest_id=-110502
   
-
-  
-    
     monthday_in=day_in.day
     month_in=day_in.month
     year_in=day_in.year
@@ -47,7 +44,7 @@ def crawler(type_of_location,location,day_in,day_out):
         ua = UserAgent()
     except FakeUserAgentError:
         print("Connection error, please verify your connection")
-        return
+        return 'connection error'
 
     headers={'User-Agent': ua.random}
     print (headers)
@@ -136,8 +133,11 @@ def crawler(type_of_location,location,day_in,day_out):
                     hotel_list=hotel_list+hotel_data
                 else:
                     continue
-            
-            elif args.scraping_type == 3:
+            elif args.scraping_type == 3:   
+                hotel_ratings=hotel_ratings_update(day_in,day_out,soup)
+                hotel_list.append(hotel_ratings)
+
+            elif args.scraping_type == 4:
                 hotel_reviews=hotel_reviews_update(headers,soup)
                 hotel_list.append(hotel_reviews)
 
@@ -207,18 +207,14 @@ def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
     t0 = time()
 
     hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
-
-    if hotel_soup.find('span', class_='review-score-badge'):
-        av_rating=hotel_soup.find('span', class_='review-score-badge').text.strip('\t\r\n')
-        av_rating=float(re.sub('[^0-9,]', "", av_rating).replace(",", "."))
-    else:
-        av_rating=None
-    #print(av_rating)
     
-    room_size=[]
     room_list=[]
     if hotel_soup.find(id='room_availability_container'):
         room_availability_container= hotel_soup.find(id='room_availability_container')
+       
+        text_file = open("Output_per_room_size.html", "w")
+        text_file.write(str(hotel_soup))
+        text_file.close()
 
         for tr in room_availability_container.find_all('tr', class_=re.compile("^room_loop.*maintr $")):
         #loop on room to get each one characteristics
@@ -228,33 +224,22 @@ def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
                 room_alldata=room_get_all_data(hotel_id,day_in,day_out,room_data,tr1)
                 #print(room_alldata.room_id,room_alldata.room_type,room_alldata.room_facilities,room_alldata.room_inc1,room_alldata.room_inc0,room_alldata.breakfast_opt,room_alldata.policy_opt,room_alldata.max_occ,room_alldata.room_left,room_alldata.price)
                 room_list.append(room_alldata)
-                
-
-            
-                        
-            if tr.select_one('span.info'):
-                room_size_=tr.select_one('span.info').text
-                room_size.append(re.sub('[^0-9,]', "", room_size_))
-            elif tr.select_one('div.info'):
-                room_size_=tr.select_one('div.info').text
-                room_size.append(re.sub('[^0-9,]', "", room_size_))
-            else:
-                room_size.append(None)
-
             
         return room_list
     else:
         print('no available rooms')
-        return None
+        room_alldata=room_get_all_data(hotel_id,day_in,day_out,'no room','no av room')
+        return [room_alldata]
     
 ##################################################################################################
 
 def room_get_main_data (tr):
     
     class room_main_data(object):
-        def __init__(self,room_id,room_type,room_facilities,room_inc1,room_inc0):
+        def __init__(self,room_id,room_type,room_size,room_facilities,room_inc1,room_inc0):
             self.room_id=room_id
             self.room_type=room_type
+            self.room_size=room_size
             self.room_facilities=room_facilities
             self.room_inc1=room_inc1
             self.room_inc0=room_inc0
@@ -273,31 +258,49 @@ def room_get_main_data (tr):
             room_facilities.append(el['data-name-en'])
         except KeyError:
             continue
-            
-    for el in tr.select('div.incExcInPriceNew'):
-        if 'Include' in el.select_one('span'):
-            room_inc1=el.text.strip('\:')
-        elif 'Non include' in el.select_one('span'):
-            room_inc0=el.text.strip('\:')
-        else:
-            room_inc1=None
-            room_inc0=None
+    if tr.select('div.incExcInPriceNew'):       
+        for el in tr.select('div.incExcInPriceNew'):
+            if 'Include' in el.select_one('span'):
+                room_inc1=el.text.split(':')[1]
+                if 'Non include' in el.select_one('span'):
+                    room_inc0=el.text.split(':')[1]
+                else:
+                    room_inc0=None
+            elif 'Non include' in el.select_one('span'):
+                 room_inc1=None
+                 room_inc0=el.text.split(':')[1]
+            else:
+                room_inc1=None
+                room_inc0=None
+    else:
+        room_inc1=None
+        room_inc0=None
     print(room_inc1,room_inc0)
-    
-    return room_main_data(room_id,room_type,room_facilities,room_inc1,room_inc0)
+
+    if tr.select_one('span.info'):
+        room_size_=tr.select_one('span.info').text
+        room_size=float(re.sub('[^0-9,]', "", room_size_))
+    elif tr.select_one('div.info'):
+        room_size_=tr.select_one('div.info').text
+        room_size=float(re.sub('[^0-9,]', "", room_size_))
+    else:
+        room_size=None
+    print(room_size)
+    return room_main_data(room_id,room_type,room_size,room_facilities,room_inc1,room_inc0)
 
 ##############################################################################################
 
 def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
     d=room_data
     class room_all_data(object):
-        def __init__(self,hotel_id,day_in,day_out,room_id,room_type,room_facilities,room_inc1,room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left):
+        def __init__(self,hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,room_inc1,room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left):
             self.hotel_id=hotel_id
             self.day_in=day_in
             self.day_out=day_out
             self.search_date=(datetime.datetime.now())
             self.room_id=room_id
             self.room_type=room_type
+            self.room_size=room_size
             self.room_facilities=room_facilities
             self.room_inc1=room_inc1
             self.room_inc0=room_inc0   
@@ -306,7 +309,10 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
             self.policy_opt=policy_opt
             self.max_occ=max_occ
             self.room_left=room_left
-            
+
+    if tr1 == 'no av room' and room_data == 'no room' :
+        return room_all_data(hotel_id,day_in,day_out,None,'no av room',None,None,None,None,None,None,None,None,None)
+
     if tr1.select_one('strong.js-track-hp-rt-room-price'):
         price=tr1.select_one('strong.js-track-hp-rt-room-price').text.strip('\t\r\n\€xa')
         price=(float(re.sub('[^0-9,]', "", price).replace(",", ".")))
@@ -338,7 +344,122 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
     except:
         room_left=None
             
-    return room_all_data(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left)
+    return room_all_data(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left)
+
+#######################################################################################################
+
+def hotel_ratings_update(day_in,day_out,hotel_soup):
+    
+    class hotel_ratings(object):
+        def __init__(self,hotel_id,day_in,day_out,av_rating,superb_score,good_score,average_score,poor_score,very_poor_score,brakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score):
+            self.hotel_id=hotel_id
+            self.day_in=day_in
+            self.day_out=day_out
+            self.search_date=(datetime.datetime.now())
+            self.av_rating=av_rating
+            self.superb_score=superb_score
+            self.good_score=good_score
+            self.average_score=average_score
+            self.poor_score=poor_score
+            self.very_poor_score=very_poor_score
+            self.breakfast_score=breakfast_score
+            self.clean_score=clean_score
+            self.comfort_score=comfort_score
+            self.location_score=location_score
+            self.services_score=services_score
+            self.value_score=value_score
+            self.wifi_score=wifi_score
+            
+
+    t0 = time()
+
+    hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
+
+    if hotel_soup.find('span', class_='review-score-badge'):
+        av_rating=hotel_soup.find('span', class_='review-score-badge').text.strip('\t\r\n')
+        av_rating=float(re.sub('[^0-9,]', "", av_rating).replace(",", "."))
+    else:
+        av_rating=None
+    #print(av_rating)
+
+    try:
+        score_dist=hotel_soup.select('span.review_list_score_breakdown_col')[0]
+    except:
+        score_dist=None
+
+    try:
+        superb_score=score_dist.find('li',{'data-question':'review_adj_superb'}).find('p', class_='review_score_value').text
+    except:
+        superb_score=None
+
+    try:
+        good_score=score_dist.find('li', {'data-question':'review_adj_good'}).find('p', class_='review_score_value').text
+    except:
+        good_score=None
+
+    try:
+        average_score=score_dist.find('li', {'data-question':'review_adj_average_okay'}).find('p', class_='review_score_value').text
+    except:
+        average_score=None
+
+    try:
+        poor_score=score_dist.find('li', {'data-question':'review_adj_poor'}).find('p', class_='review_score_value').text
+    except:
+        poor_score=None
+
+    try:
+        very_poor_score=score_dist.find('li', {'data-question':'review_adj_very_poor'}).find('p', class_='review_score_value').text
+    except:
+        very_poor_score=None
+            
+    print(superb_score, good_score, average_score, poor_score, very_poor_score)
+
+    try:
+        score_spec=hotel_soup.select('span.review_list_score_breakdown_col')[1]
+    except:
+        score_spec=None
+
+    try:
+        breakfast_score=score_spec.find('li',{'data-question':'breakfast'}).find('p', class_='review_score_value').text
+    except:
+        breakfast_score=None
+
+    try:
+        clean_score=score_spec.find('li',{'data-question':'hotel_clean'}).find('p', class_='review_score_value').text
+    except:
+        clean_score=None
+
+    try:
+        comfort_score=score_spec.find('li',{'data-question':'hotel_comfort'}).find('p', class_='review_score_value').text
+    except:
+        comfort_score=None
+
+    try:
+        location_score=score_spec.find('li',{'data-question':'hotel_location'}).find('p', class_='review_score_value').text
+    except:
+        location_score=None
+
+    try:
+        services_score=score_spec.find('li',{'data-question':'hotel_services'}).find('p', class_='review_score_value').text
+    except:
+        services_score=None
+
+    try:
+        staff_score=score_spec.find('li',{'data-question':'hotel_staff'}).find('p', class_='review_score_value').text
+    except:
+        staff_score=None
+
+    try:
+        value_score=score_spec.find('li',{'data-question':'hotel_value'}).find('p', class_='review_score_value').text
+    except:
+        value_score=None
+
+    try:
+        wifi_score=score_spec.find('li',{'data-question':'hotel_wifi'}).find('p', class_='review_score_value').text
+    except:
+        wifi_score=None
+
+    return hotel_ratings(hotel_id,day_in,day_out,av_rating,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)
 
 #########################################################################################################
 
@@ -455,27 +576,14 @@ def db_hotel_data_update(hotel_data_list) :
     cur=conn.cursor()
 
     for i in hotel_data_list:
-        hotel_id=i.hotel_id
-        day_in=i.day_in
-        day_out=i.day_out
-        room_id=i.room_id
-        room_type=i.room_type
-        room_facilities=i.room_facilities
-        room_inc1=i.room_inc1
-        room_inc0=i.room_inc0
-        price=i.price
-        breakfast_opt=i.breakfast_opt
-        policy_opt=i.policy_opt
-        max_occ=i.max_occ
-        search_date=i.search_date
 
         SQL = '''BEGIN;
-                 INSERT INTO hotel_data (hotel_id,day_in,day_out,room_id,room_type,room_facilities,inclusive,non_inclusive,price,breakfast_opt,policy_opt,max_occ,search_date)
-	         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) 
+                 INSERT INTO hotel_data (hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,inclusive,non_inclusive,price,breakfast_opt,policy_opt,max_occ,search_date)
+	         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) 
                  ;
                  COMMIT;'''
 
-        data = (hotel_id,day_in,day_out,room_id,room_type,room_facilities,room_inc1,room_inc0,price,breakfast_opt,policy_opt,max_occ,search_date)
+        data = (i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date)
 
         cur.execute(SQL, data)
 
@@ -517,6 +625,29 @@ def  db_hotel_reviews_update(hotel_reviews_list):
 
 ####################################################################################
 
+def db_hotel_ratings_update(hotel_ratings_list):
+#connect to database "webcrawling", insert new row data in hotel_ratings table
+   
+    conn=psycopg2.connect('dbname=webcrawling user=chiara')
+
+    cur=conn.cursor()
+
+    for i in hotel_ratings_list:
+
+        SQL = '''BEGIN;
+                 INSERT INTO hotel_data (hotel_id,day_in,day_out,av_rating,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)
+	         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) 
+                 ;
+                 COMMIT;'''
+
+        data = (i.hotel_id,i.day_in,i.day_out,i.av_rating,i.superb_score,i.good_score,i.average_score,i.poor_score,i.very_poor_score,i.breakfast_score,i.clean_score,i.comfort_score,i.location_score,i.services_score,i.staff_score,i.value_score,i.wifi_score)
+
+        cur.execute(SQL, data)
+
+    cur.close()
+    conn.close()
+
+#######################################################################################
 def id_db_locations(loc_name,loc_type) :
      
     conn=psycopg2.connect('dbname=webcrawling user=chiara')
@@ -564,20 +695,42 @@ day_out= datetime.datetime.strptime(day_out_str, '%Y-%m-%d')
 if args.scraping_type == 1:
     print("type of scraping: hotel_table_update")
     hotel_table_list=crawler(type_of_location,location,day_in,day_out)
-    #db updating hotel_list in webcraling postgress db
-    db_hotel_list_update(hotel_table_list)
+    if hotel_table_list != 'connection error':
+        while hotel_table_list is None:
+            hotel_table_list=crawler(type_of_location,location,day_in,day_out)
+            time.sleep(30)
+        #db updating hotel_list in webcraling postgress db
+        db_hotel_list_update(hotel_table_list)
 
 elif args.scraping_type == 2:   
     print("type of scraping: hotel_data_update ")
     hotel_data_list=crawler(type_of_location,location,day_in,day_out)
-    #db updating hotel_data in webcrawling postgress db
-    db_hotel_data_update(hotel_data_list)
+    if hotel_data_list != 'connection error':
+        while hotel_data_list is None:
+            hotel_data_list=crawler(type_of_location,location,day_in,day_out)
+            time.sleep(30)
+        #db updating hotel_data in webcrawling postgress db
+        db_hotel_data_update(hotel_data_list)
 
 elif args.scraping_type == 3:   
+    print("type of scraping: hotel_ratings_update ")
+    hotel_ratings_list=crawler(type_of_location,location,day_in,day_out)
+    if hotel_ratings_list != 'connection error':
+        while hotel_ratings_list is None:
+            hotel_ratings_list=crawler(type_of_location,location,day_in,day_out)
+            time.sleep(30)
+        #db updating hotel_ratings in webcrawling postgress db
+        db_hotel_ratings_update(hotel_ratings_list)
+
+elif args.scraping_type == 4:   
     print("type of scraping: hotel_reviews_update ")
     hotel_reviews_list=crawler(type_of_location,location,day_in,day_out)
-    #db updating hotel_reviews in webcrawling postgress db
-    db_hotel_reviews_update(hotel_reviews_list)
+    if hotel_reviews_list != 'connection error':
+        while hotel_reviews_list is None:
+            hotel_reviews_list=crawler(type_of_location,location,day_in,day_out)
+            time.sleep(30)
+        #db updating hotel_reviews in webcrawling postgress db
+        db_hotel_reviews_update(hotel_reviews_list)
 
 else:
     print("chose type of scraping, -h for help")
