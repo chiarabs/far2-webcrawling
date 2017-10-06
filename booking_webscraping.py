@@ -278,11 +278,11 @@ def room_get_main_data (tr):
     print(room_inc1,room_inc0)
 
     if tr.select_one('span.info'):
-        room_size_=tr.select_one('span.info').text
-        room_size=float(re.sub('[^0-9,]', "", room_size_))
+        room_size=tr.select_one('span.info').text
+        room_size=float(re.sub('[^0-9,]', "", room_size))
     elif tr.select_one('div.info'):
-        room_size_=tr.select_one('div.info').text
-        room_size=float(re.sub('[^0-9,]', "", room_size_))
+        room_size=tr.select_one('div.info').text
+        room_size=float(re.sub('[^0-9,]', "", room_size))
     else:
         room_size=None
     print(room_size)
@@ -351,12 +351,13 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
 def hotel_ratings_update(day_in,day_out,hotel_soup):
     
     class hotel_ratings(object):
-        def __init__(self,hotel_id,day_in,day_out,av_rating,superb_score,good_score,average_score,poor_score,very_poor_score,brakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score):
+        def __init__(self,hotel_id,day_in,day_out,av_rating,n_ratings,superb_score,good_score,average_score,poor_score,very_poor_score,brakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score):
             self.hotel_id=hotel_id
             self.day_in=day_in
             self.day_out=day_out
             self.search_date=(datetime.datetime.now())
             self.av_rating=av_rating
+            self.n_ratings=n_ratings
             self.superb_score=superb_score
             self.good_score=good_score
             self.average_score=average_score
@@ -459,7 +460,13 @@ def hotel_ratings_update(day_in,day_out,hotel_soup):
     except:
         wifi_score=None
 
-    return hotel_ratings(hotel_id,day_in,day_out,av_rating,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)
+    try:
+        n_ratings=hotel_soup.select_one('span.review-score-widget__subtext').text
+        n_ratings=int(re.sub('[^0-9,]', "", n_ratings))
+    except:
+        n_ratings=None
+    print(n_ratings)
+    return hotel_ratings(hotel_id,day_in,day_out,av_rating,n_ratings,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)
 
 #########################################################################################################
 
@@ -635,12 +642,12 @@ def db_hotel_ratings_update(hotel_ratings_list):
     for i in hotel_ratings_list:
 
         SQL = '''BEGIN;
-                 INSERT INTO hotel_data (hotel_id,day_in,day_out,av_rating,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)
+                 INSERT INTO hotel_data (hotel_id,day_in,day_out,av_rating,n_ratings,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)
 	         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) 
                  ;
                  COMMIT;'''
 
-        data = (i.hotel_id,i.day_in,i.day_out,i.av_rating,i.superb_score,i.good_score,i.average_score,i.poor_score,i.very_poor_score,i.breakfast_score,i.clean_score,i.comfort_score,i.location_score,i.services_score,i.staff_score,i.value_score,i.wifi_score)
+        data = (i.hotel_id,i.day_in,i.day_out,i.av_rating,i.n_ratings,i.superb_score,i.good_score,i.average_score,i.poor_score,i.very_poor_score,i.breakfast_score,i.clean_score,i.comfort_score,i.location_score,i.services_score,i.staff_score,i.value_score,i.wifi_score)
 
         cur.execute(SQL, data)
 
