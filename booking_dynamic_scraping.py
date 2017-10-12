@@ -256,11 +256,11 @@ def hotel_table_update(hotel_link,hotel_type,hotel_soup) :
 ##################################################################################################
 
 def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
-
-    t0 = time.time()
+    t0 = time.time()   
     try:
         hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
     except: 
+        print('error: no hotel_id')
         return 0
 
     room_list=[]
@@ -269,27 +269,38 @@ def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
 
         for tr in room_availability_container.find_all('tr', class_=re.compile("^room_loop.*maintr $")):
         #loop on rooms to get each one characteristics
-            room_data=room_get_main_data(tr)
+            room_counter=int(re.sub('[^0-9]', "", str(tr['class'])))
+            try: 
+                room_size=hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').select_one('span.info.rooms-block__pills-container__pill').text
+                room_size=int(re.sub('[^0-9]', "", room_size))
+            except:
+                try:
+                    room_size=hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').select_one('div.info.rooms-block__pills-container__pill').text
+                    room_size=int(re.sub('[^0-9]', "", room_size))
+                except:
+                    print('no room size')
+                    print(hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow'))
+                    room_size=None
+            room_data=room_get_main_data(tr,room_size)
             for tr1 in room_availability_container.find_all('tr',{'id':re.compile("^%s"%room_data.room_id)}):
             #loop on room offers
                 room_alldata=room_get_all_data(hotel_id,day_in,day_out,room_data,tr1)
                 #print(room_alldata.room_id,room_alldata.room_type,room_alldata.room_facilities,room_alldata.room_inc1,room_alldata.room_inc0,room_alldata.breakfast_opt,room_alldata.policy_opt,room_alldata.max_occ,room_alldata.room_left,room_alldata.price)
                 room_list.append(room_alldata)
-            
-        return room_list
+                    
     else:
         print('no available rooms')
         room_list=[room_get_all_data(hotel_id,day_in,day_out,'no room','no av room')]
     
-    try:    
-        db_hotel_data_update(room_list)
-        return 1
-    except:
-        return 0
+    #try:    
+    db_hotel_data_update(room_list)
+        #return 1
+    #except:
+     #   return 0
     
 ##################################################################################################
 
-def room_get_main_data (tr):
+def room_get_main_data (tr,room_size):
     
     class room_main_data(object):
         def __init__(self,room_id,room_type,room_size,room_facilities,room_inc1,room_inc0):
@@ -301,7 +312,7 @@ def room_get_main_data (tr):
             self.room_inc0=room_inc0
    
     room_id=tr.select_one('div.rt-room-info')['id']
-
+    
     if tr.select_one('a.jqrt'):
         room_type=tr.select_one('a.jqrt')['data-room-name-en']
     else:
@@ -316,13 +327,13 @@ def room_get_main_data (tr):
             continue
     if tr.select('div.incExcInPriceNew'):       
         for el in tr.select('div.incExcInPriceNew'):
-            if 'Include' in el.select_one('span'):
+            if any(el in ['include','incluso','Include','Incluso'] for el in el.select_one('span')):
                 room_inc1=el.text.split(':')[1].strip('\t\r\n')
-                if 'Non include' in el.select_one('span'):
+                if  any(el in ['non','Non'] for el in el.select_one('span')):
                     room_inc0=el.text.split(':')[1].strip('\t\r\n')
                 else:
                     room_inc0=None
-            elif 'Non include' in el.select_one('span'):
+            elif any(el in ['non', 'Non'] for el in el.select_one('span')):
                  room_inc1=None
                  room_inc0=el.text.split(':')[1]
             else:
@@ -332,16 +343,14 @@ def room_get_main_data (tr):
         room_inc1=None
         room_inc0=None
     print(room_inc1,room_inc0)
-
-    if tr.select_one('span.info'):
-        room_size=tr.select_one('span.info').text
-        room_size=float(re.sub('[^0-9,]', "", room_size))
-    elif tr.select_one('div.info'):
-        room_size=tr.select_one('div.info').text
-        room_size=float(re.sub('[^0-9,]', "", room_size))
-    else:
-        room_size=None
-    print(room_size)
+    
+    if room_size is None:
+        try:
+            room_size=tr.select_one('i.bicon-roomsize').next_sibling
+            room_size=int(re.sub('[^0-9]', "", room_size))
+        except:
+            room_size=None
+    
     return room_main_data(room_id,room_type,room_size,room_facilities,room_inc1,room_inc0)
 
 ##############################################################################################
@@ -399,7 +408,7 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
         room_left=re.sub('[^0-9,]', "", room_left)
     except:
         room_left=None
-            
+    print(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left)
     return room_all_data(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left)
 
 #######################################################################################################
@@ -651,7 +660,7 @@ def db_hotel_list_update(hotel_table_list) :
         hotel_star=i.hotel_star
         hotel_facilities=i.hotel_facilities
     
-
+        
         SQL = '''BEGIN;
                  INSERT INTO hotel_list (hotel_name,location,hotel_address,hotel_id,hotel_type,hotel_star,hotel_facilities)
 	         SELECT %s,%s,%s,%s,%s,%s,%s
@@ -678,12 +687,13 @@ def db_hotel_data_update(hotel_data_list) :
     for i in hotel_data_list:
 
         SQL = '''BEGIN;
+                 UPDATE hotel_data SET hotel_id=(%s),day_in=(%s),day_out=(%s),room_id=(%s),room_type=(%s),room_size=(%s),room_facilities=(%s),inclusive=(%s),non_inclusive=(%s),price=(%s),breakfast_opt=(%s),policy_opt=(%s),max_occ=(%s),search_date=(%s) WHERE hotel_id=(%s) AND search_date=(%s);
                  INSERT INTO hotel_data (hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,inclusive,non_inclusive,price,breakfast_opt,policy_opt,max_occ,search_date)
-	         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) 
+	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT (hotel_id,search_date) FROM hotel_data WHERE hotel_id=(%s) AND search_date=(%s))
                  ;
                  COMMIT;'''
 
-        data = (i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date)
+        data = (i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date,i.hotel_id,i.search_date,i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date,i.hotel_id,i.search_date)
 
         cur.execute(SQL, data)
 
@@ -712,11 +722,11 @@ def  db_hotel_reviews_update(hotel_reviews_list):
     
             SQL = '''BEGIN;
                  INSERT INTO hotel_reviews (hotel_id,score,positive_comment,negative_comment,post_date,author_name,author_nat,author_group) 
-	         VALUES (%s,%s,%s,%s,%s,%s,%s,%s) 
+	         SELECT %s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXIST (SELECT (post_date,author_name) FROM hotel_reviews WHERE post_date=%s AND author_name=%s)
                  ;
                  COMMIT;'''
 
-            data = (hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
+            data = (hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group,post_date,author_name)
 
             cur.execute(SQL, data)
 
@@ -813,14 +823,13 @@ max_it=0 #fix the max number of request attempt
 if args.scraping_type == 1 or args.scraping_type == 2 or args.scraping_type == 3 or args.scraping_type == 4:
     print('type of scraping: ',args.scraping_type)
     result=crawler(type_of_location,location,day_in,day_out)
-    print(result)
     if result == 'connection error':
         print('connection error at ',start_page)
     else:
         while result == 0 and max_it<10:
             resutl=crawler(type_of_location,location,day_in,day_out)
             max_it=max_it+1
-    print("scraping and db updating done in %0.3fs" % (time.time() - start))
+        print("scraping and db updating done in %0.3fs" % (time.time() - start))
 
 else:
     print("chose type of scraping, -h for help")
