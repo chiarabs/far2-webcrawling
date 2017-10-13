@@ -32,12 +32,20 @@ def init_db():
 
     sql = 'CREATE TABLE locations (id_loc INTEGER PRIMARY KEY, loc_name VARCHAR(50), loc_type VARCHAR(10))'
     cur.execute(sql)
-   
+    con.commit()
+
+    data=[(-110502,'Aosta','city'),(-116466,'Courmayeur','city'),(-112164,'Breuil-Cervinia','city'),(-115309,'Chatillon','city'),(-127084,'Saint-Vincent','city'),(-125429,'Pont-Saint-Martin','city'),(900040059,'Ayas','city'),(-115778,'Cogne','city'),(4251,'Apli italiane','region'),(3761,'Alpi austriache','region'),(3832,'Alpi svizzere','region'),(3774,'Alpi francesi','region'),(2151,'Alpi slovene','region'),(913,'Valle d Aosta','region')]
+    records_list_template = ','.join(['%s'] * len(data))
+    sql = 'INSERT INTO locations (id_loc,loc_name,loc_type) VALUES {}'.format(records_list_template)
+    
+    cur.execute(sql,data)
 
     sql = '''CREATE TABLE hotel_list (
 hotel_name VARCHAR(50), location VARCHAR(50), hotel_address VARCHAR(200), hotel_id INTEGER, hotel_type VARCHAR(20), hotel_star INTEGER, hotel_facilities VARCHAR(2000), loc_name VARCHAR(50), loc_type VARCHAR(10)
        ) 
        '''
+   
+
     if cur.execute(sql):
         print('hotel_list table correctly created')
     else:
@@ -68,6 +76,11 @@ hotel_id INTEGER, positive_comment VARCHAR, negative_comment VARCHAR,post_date D
     cur.close()
     con.close()
     
+    key={'db_name':db_name,'user_name':sys_user_name}
+    text_file = open("dbkey.txt", "w")
+    text_file.write(str(key))
+    text_file.close()
+
     return 1
 
 init_db()
