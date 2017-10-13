@@ -10,6 +10,8 @@ booking.com and stored in a postgres database.
 
 Required packages: BeautifulSoup, request, fake_useragent, psycopg2.  
 
+If connection db is not present yet, run new_db.py
+
 """
 
 from bs4 import BeautifulSoup as bs
@@ -22,14 +24,13 @@ import argparse
 import datetime
 import time
 import locale
+import new_db
 locale.setlocale(locale.LC_ALL, 'it_IT.utf8')
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-t", "--scraping_type", action="count", default=0,help='select the type of scraping: -t for hotel_list update (get hotel names), -tt for hotel_data update (get hotel_id, price, average rating), -ttt for hotel_ratings update, -tttt fot hotel_reviews update (get users comments) ')
 args = parser.parse_args()
     
-
-
 base_url='http://www.booking.com'
 
 def crawler(type_of_location,location,day_in,day_out):
@@ -82,21 +83,24 @@ def crawler(type_of_location,location,day_in,day_out):
         print (url)
         
         max_it=1
-        while True and max_it<10:
+        while max_it<10:
             try:
-                response = requests.get(url, headers=headers)
+                response = requests.get(url, headers=headers).text
                 break
             except requests.exceptions.RequestException as e:  
                 print (e,' attempt n. ',max_it)
-                max_it=max_it+1
+                text_file = open("ConnectionError_msg.txt", "a")
+                text_file.write('Connection error: %s'%e)
+                text_file.close()
+                max_it+=1
                 time.sleep(10)
         if max_it==10:
             start_page=i
             return 'connection error'
-        
-        response = requests.get(url,headers=headers).text
+
         soup = bs(response,'lxml')
 
+        #stopping loop control
         if soup.get('class') == 'Take Control of Your Search':
             break
         if soup.get('class') == 'trclassack_broaden_search':
@@ -114,7 +118,7 @@ def crawler(type_of_location,location,day_in,day_out):
             print('Error in loading and stopping pages')
             return 'error pages' 
         
-        #loop over hotel  links to get each hotel_soup
+        #loop over hotel links to get each hotel_soup
         try: 
             soup.find_all('a',class_='hotel_name_link url')
         except:
@@ -131,17 +135,23 @@ def crawler(type_of_location,location,day_in,day_out):
                 hotel_type=None
             
             max_it=1
-            while True and max_it<10:
+            while max_it<10:
                 try:
-                    response = requests.get(hotel_link, headers=headers)
+                    response = requests.get(hotel_link, headers=headers).text.strip('\t\r\n')
                     break
                 except requests.exceptions.RequestException as e:  
                     print (e,' attempt n. ',max_it)
+                    text_file = open("ConnectionError_msg.txt", "a")
+                    text_file.write('Connection error: %s'%e)
+                    text_file.close()
                     max_it=max_it+1
                     time.sleep(10)
+                
+            if max_it==10:
+                start_page=i
+                return 0
 
-            response = requests.get(hotel_link, headers=headers).text.strip('\t\r\n')
-            soup = bs(response,'lxml')#.encode('utf-8')
+            soup = bs(response,'lxml')
 
             if args.scraping_type < 2:
                 hotel_table_check=hotel_table_update(hotel_link,hotel_type,soup)
@@ -149,6 +159,7 @@ def crawler(type_of_location,location,day_in,day_out):
                    text_file = open("Error_msg.txt", "a")
                    text_file.write('Hotel_table_update: error getting data for %s'%hotel_link)
                    text_file.close()
+                   return 0
                 else:
                     continue
             
@@ -267,36 +278,39 @@ def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
     if hotel_soup.find(id='room_availability_container'):
         room_availability_container= hotel_soup.find(id='room_availability_container')
 
-        for tr in room_availability_container.find_all('tr', class_=re.compile("^room_loop.*maintr $")):
         #loop on rooms to get each one characteristics
+        for tr in room_availability_container.find_all('tr', class_=re.compile("^room_loop.*maintr $")):
             room_counter=int(re.sub('[^0-9]', "", str(tr['class'])))
             try: 
                 room_size=hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').select_one('span.info.rooms-block__pills-container__pill').text
                 room_size=int(re.sub('[^0-9]', "", room_size))
             except:
                 try:
-                    room_size=hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').select_one('div.info.rooms-block__pills-container__pill').text
+                    #print(hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').select_one('div.info'))
+                    room_size=hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').find('strong',text='Supeficie camera:').nextSibling.text
                     room_size=int(re.sub('[^0-9]', "", room_size))
+                    #print(room_size)
                 except:
-                    print('no room size')
-                    print(hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow'))
                     room_size=None
+
             room_data=room_get_main_data(tr,room_size)
-            for tr1 in room_availability_container.find_all('tr',{'id':re.compile("^%s"%room_data.room_id)}):
+
             #loop on room offers
+            for tr1 in room_availability_container.find_all('tr',{'id':re.compile("^%s"%room_data.room_id)}):
                 room_alldata=room_get_all_data(hotel_id,day_in,day_out,room_data,tr1)
-                #print(room_alldata.room_id,room_alldata.room_type,room_alldata.room_facilities,room_alldata.room_inc1,room_alldata.room_inc0,room_alldata.breakfast_opt,room_alldata.policy_opt,room_alldata.max_occ,room_alldata.room_left,room_alldata.price)
                 room_list.append(room_alldata)
                     
     else:
         print('no available rooms')
         room_list=[room_get_all_data(hotel_id,day_in,day_out,'no room','no av room')]
     
-    #try:    
-    db_hotel_data_update(room_list)
-        #return 1
-    #except:
-     #   return 0
+    print('single scraping done in %0.3fs' % (time.time() - t0))
+    try:    
+        db_hotel_data_update(room_list)
+        print('single scraping and updating done in %0.3fs' % (time.time() - t0))
+        return 1
+    except:
+        return 0
     
 ##################################################################################################
 
@@ -318,37 +332,33 @@ def room_get_main_data (tr,room_size):
     else:
         room_type=None
 
-    facility=tr.select_one('div.rt-all-facilities-hidden')
+    try:
+        facility=tr.select_one('div.rt-all-facilities-hidden').select('span')
+        for el in facility:
+            try:
+                room_facilities.append(el['data-name-en'])
+            except KeyError:
+                continue
+    except:
+        room_facilities=None
     room_facilities=[]
-    for el in facility.select('span'):
-        try:
-            room_facilities.append(el['data-name-en'])
-        except KeyError:
-            continue
+    
+
+    room_inc1=None
+    room_inc0=None
     if tr.select('div.incExcInPriceNew'):       
         for el in tr.select('div.incExcInPriceNew'):
-            if any(el in ['include','incluso','Include','Incluso'] for el in el.select_one('span')):
-                room_inc1=el.text.split(':')[1].strip('\t\r\n')
-                if  any(el in ['non','Non'] for el in el.select_one('span')):
-                    room_inc0=el.text.split(':')[1].strip('\t\r\n')
-                else:
-                    room_inc0=None
-            elif any(el in ['non', 'Non'] for el in el.select_one('span')):
-                 room_inc1=None
-                 room_inc0=el.text.split(':')[1]
-            else:
-                room_inc1=None
-                room_inc0=None
-    else:
-        room_inc1=None
-        room_inc0=None
-    print(room_inc1,room_inc0)
+            if el.select_one('span.incExcEmphasize').text in ['include','incluso','Include','Incluso']:
+                room_inc1=el.text.split(':')[1].strip('.\t\r\n')
+            elif el.select_one('span.incExcEmphasize').text in ['non include','Non include','non incluso','Non incluso']:
+                room_inc0=el.text.split(':')[1].strip('.\t\r\n')
     
     if room_size is None:
         try:
             room_size=tr.select_one('i.bicon-roomsize').next_sibling
             room_size=int(re.sub('[^0-9]', "", room_size))
         except:
+            print('no room size')
             room_size=None
     
     return room_main_data(room_id,room_type,room_size,room_facilities,room_inc1,room_inc0)
@@ -362,7 +372,7 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
             self.hotel_id=hotel_id
             self.day_in=day_in
             self.day_out=day_out
-            self.search_date=(datetime.datetime.now())
+            self.search_date=(datetime.datetime.now().date())
             self.room_id=room_id
             self.room_type=room_type
             self.room_size=room_size
@@ -374,7 +384,7 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
             self.policy_opt=policy_opt
             self.max_occ=max_occ
             self.room_left=room_left
-
+    
     if tr1 == 'no av room' and room_data == 'no room' :
         return room_all_data(hotel_id,day_in,day_out,None,'no av room',None,None,None,None,None,None,None,None,None)
 
@@ -408,7 +418,7 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
         room_left=re.sub('[^0-9,]', "", room_left)
     except:
         room_left=None
-    print(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left)
+    #print(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left)
     return room_all_data(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left)
 
 #######################################################################################################
@@ -420,7 +430,7 @@ def hotel_ratings_update(day_in,day_out,hotel_soup):
             self.hotel_id=hotel_id
             self.day_in=day_in
             self.day_out=day_out
-            self.search_date=(datetime.datetime.now())
+            self.search_date=(datetime.datetime.now().date())
             self.av_rating=av_rating
             self.n_ratings=n_ratings
             self.superb_score=superb_score
@@ -450,7 +460,6 @@ def hotel_ratings_update(day_in,day_out,hotel_soup):
         av_rating=float(re.sub('[^0-9,]', "", av_rating).replace(",", "."))
     else:
         av_rating=None
-    #print(av_rating)
 
     try:
         score_dist=hotel_soup.select('span.review_list_score_breakdown_col')[0]
@@ -551,11 +560,15 @@ def hotel_ratings_update(day_in,day_out,hotel_soup):
 
     hotel_ratings=[hotel_ratings(hotel_id,day_in,day_out,av_rating,n_ratings,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)]
     print(hotel_ratings[0])
-    #try:
-    db_hotel_ratings_update(hotel_ratings)
-    #    return 1
-    #except:
-     #   return 0
+
+    print('single scraping done in %0.3fs' % (time.time() - t0))
+
+    try:
+        db_hotel_ratings_update(hotel_ratings)
+        print('single scraping and updating done in %0.3fs' % (time.time() - t0))
+        return 1
+    except:
+        return 0
 
 #########################################################################################################
 
@@ -601,6 +614,7 @@ def hotel_reviews_update (headers, hotel_soup) :
             try:
                 response = requests.get(link_to_rev,headers=headers).text
             except:
+                
                 return 0
             review_soup=bs(response,'lxml')
             for element in review_soup.find_all('div', class_='review_item_review_container'):
@@ -635,9 +649,12 @@ def hotel_reviews_update (headers, hotel_soup) :
     print("done in %0.3fs" % (time() - t0))
 
     hotel_review=[hotel_review(hotel_id,day_in,day_out,av_rating,n_ratings,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)]
-        
+     
+    print('single scraping done in %0.3fs' % (time.time() - t0))
+
     try:
         db_hotel_reviews_update(hotel_reviews)
+        print('single scraping and updating done in %0.3fs' % (time.time() - t0))
         return 1
     except:
         return 0
@@ -689,7 +706,7 @@ def db_hotel_data_update(hotel_data_list) :
         SQL = '''BEGIN;
                  UPDATE hotel_data SET hotel_id=(%s),day_in=(%s),day_out=(%s),room_id=(%s),room_type=(%s),room_size=(%s),room_facilities=(%s),inclusive=(%s),non_inclusive=(%s),price=(%s),breakfast_opt=(%s),policy_opt=(%s),max_occ=(%s),search_date=(%s) WHERE hotel_id=(%s) AND search_date=(%s);
                  INSERT INTO hotel_data (hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,inclusive,non_inclusive,price,breakfast_opt,policy_opt,max_occ,search_date)
-	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT (hotel_id,search_date) FROM hotel_data WHERE hotel_id=(%s) AND search_date=(%s))
+	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_data WHERE hotel_id=(%s) AND search_date=(%s))
                  ;
                  COMMIT;'''
 
@@ -789,7 +806,14 @@ def id_db_locations(loc_name,loc_type) :
     cur.close()
     conn.close()
     
- 
+###################################################################################
+
+def readingdbkey():
+    with open('dbkey.txt', 'r') as f:
+        s = f.read()
+        key=eval(s)
+        return key
+   
 ####################################################################################
 start=time.time()
 
@@ -805,19 +829,35 @@ day_out= datetime.datetime.strptime(day_out_str, '%Y-%m-%d')
 
 print(__doc__)
 
-global db_name 
-global user_name
+
+
+
 global start_page
 start_page=0
 
 try:
-    db_name
-except NameError:
-    db_name=input('Database name: ')
-try:
-    user_name
-except NameError:
-    user_name=input('User name: ')
+    key=readingdbkey()
+    db_name=key['db_name']
+    user_name=key['user_name']
+    p=input('Database %s with user %s: enter c to change db or user: '%(db_name,db_name))
+    if p == 'c':
+        db_name=input('Database name: ')
+        user_name=input('User name: ')
+        key={'db_name':db_name,'user_name':sys_user_name}
+        text_file = open("dbkey.txt", "w")
+        text_file.write(str(key))
+        text_file.close()
+except FileNotFoundError:
+    p = input('No database key: create a new db (y)?  Or try to enter db name and user:')
+    if p =='y':
+        init_db()
+    else:
+        db_name=input('Database name: ')
+        user_name=input('User name: ')
+        key={'db_name':db_name,'user_name':user_name}
+        text_file = open("dbkey.txt", "w")
+        text_file.write(str(key))
+        text_file.close()
 
 max_it=0 #fix the max number of request attempt
 if args.scraping_type == 1 or args.scraping_type == 2 or args.scraping_type == 3 or args.scraping_type == 4:
@@ -828,8 +868,8 @@ if args.scraping_type == 1 or args.scraping_type == 2 or args.scraping_type == 3
     else:
         while result == 0 and max_it<10:
             resutl=crawler(type_of_location,location,day_in,day_out)
-            max_it=max_it+1
-        print("scraping and db updating done in %0.3fs" % (time.time() - start))
+            max_it+=1
+        print("global scraping and udating done in %0.3fs" % (time.time() - start))
 
 else:
     print("chose type of scraping, -h for help")
