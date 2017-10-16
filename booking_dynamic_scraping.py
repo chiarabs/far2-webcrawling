@@ -71,10 +71,10 @@ def crawler(type_of_location,location,day_in,day_out):
     #loop  over all the pages containing research results iterating on the URL offset parameter
     #loop  stops when it finds error message "take control of your search"
     offset_range=15
-    for i in range(start_page,1): #set the number of visited pages 
-        print(i)
+    for i in range(start_page,10): #set the number of visited pages 
+        print('Page ',i)
         offset=i*offset_range
-        print(offset_range)
+        #print(offset_range)
 
         if type_of_location=='city':
             url='https://www.booking.com/searchresults.it.html?;&checkin_monthday='+str(monthday_in)+'&checkin_month='+str(month_in)+';checkin_year='+str(year_in)+';checkout_monthday='+str(monthday_out)+';checkout_month='+str(month_out)+';checkout_year='+str(year_out)+';dest_id='+str(dest_id)+';dest_type=city;sb_travel_purpose=leisure;no_rooms=1;group_adults=2;group_children=0;rows=15;offset='+str(offset)
@@ -132,9 +132,9 @@ def crawler(type_of_location,location,day_in,day_out):
             hotel_link=base_url+hotel_link.strip('\t\r\n')
             print(hotel_link)
 
-            if  link.find('span',class_='sr-hotel__type'):
-                hotel_type=link.find('span', class_='sr-hotel__type').text
-            else:
+            try:
+                hotel_type=link.find('span', class_='sr-hotel__type').text.strip('\t\r\n')
+            except:
                 hotel_type=None
             
             max_it=1
@@ -159,16 +159,18 @@ def crawler(type_of_location,location,day_in,day_out):
             if args.scraping_type < 2:
                 hotel_table_check=hotel_table_update(hotel_link,hotel_type,soup)
                 if hotel_table_check==0:
-                   text_file = open("Error_msg.txt", "a")
-                   text_file.write('Hotel_table_update: error getting data for %s'%hotel_link)
-                   text_file.close()
-                   return 0
+                    start_page=i
+                    text_file = open("Error_msg.txt", "a")
+                    text_file.write('Hotel_table_update: error getting data for %s'%hotel_link)
+                    text_file.close()
+                    return 0
                 else:
                     continue
             
             elif args.scraping_type == 2:   
                 hotel_data_check=hotel_data_update(day_in,day_out,hotel_link,soup)
                 if hotel_data_check==0:
+                    start_page=i
                     text_file = open("Error_msg.txt", "a")
                     text_file.write('Hotel_data_update: error getting data for %s '%hotel_link)
                     text_file.close()
@@ -179,6 +181,7 @@ def crawler(type_of_location,location,day_in,day_out):
             elif args.scraping_type == 3:   
                 hotel_ratings_check=hotel_ratings_update(day_in,day_out,soup)
                 if hotel_ratings_check==0:
+                    start_page=i
                     text_file = open("Error_msg.txt", "a")
                     text_file.write('Hotel_ratings_update: error getting data for %s'%hotel_link)
                     text_file.close()
@@ -189,6 +192,7 @@ def crawler(type_of_location,location,day_in,day_out):
             elif args.scraping_type == 4:
                 hotel_reviews_check=hotel_reviews_update(headers,soup)
                 if hotel_reviews_check==0:
+                    start_page=i
                     text_file = open("Error_msg.txt", "a")
                     text_file.write('Hotel_reviews_update: error getting data for %s'%hotel_link)
                     text_file.close()
@@ -218,7 +222,7 @@ def hotel_table_update(hotel_link,hotel_type,hotel_soup) :
     
     try:
         hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
-        print(hotel_id)
+        #print(hotel_id)
     except:
         print('Error hotel_id')
         hotel_id=None
@@ -233,13 +237,13 @@ def hotel_table_update(hotel_link,hotel_type,hotel_soup) :
         hotel_name=hotel_soup.find('span', class_='sr-hotel__name').text.strip('\t\r\n')
     else:
         hotel_name= None
-    print(hotel_name)
+    #print(hotel_name)
                       
     if hotel_soup.find('span', class_='hp_address_subtitle'):
         hotel_address=hotel_soup.find('span', class_='hp_address_subtitle').text.strip('\t\r\n')
     else:
         hotel_address=None
-    print(hotel_address)
+    #print(hotel_address)
 
     try:
         hotel_soup.find('span', class_='hp__hotel_ratings__stars').find('span', class_='invisible_spoken')
@@ -247,7 +251,7 @@ def hotel_table_update(hotel_link,hotel_type,hotel_soup) :
         hotel_star=int(re.sub('[^0-9,]', "", hotel_star))
     except:
         hotel_star=None
-    print(hotel_star)
+    #print(hotel_star)
 
     hotel_facilities=[]
     facilities_list=hotel_soup.find('div', class_='facilitiesChecklist')
@@ -310,6 +314,7 @@ def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
         print('single scraping and updating done in %0.3fs' % (time.time() - t0))
         return 1
     except:
+        raise 
         return 0
     
 ##################################################################################################
@@ -388,17 +393,15 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
     if tr1 == 'no av room' and room_data == 'no room' :
         return room_all_data(hotel_id,day_in,day_out,None,'no av room',None,None,None,None,None,None,None,None,None)
 
-    if tr1.select_one('strong.js-track-hp-rt-room-price'):
+    try:
         price=tr1.select_one('strong.js-track-hp-rt-room-price').text.strip('\t\r\n\€xa')
         price=(float(re.sub('[^0-9,]', "", price).replace(",", ".")))
-    elif tr1.find('span', class_='hprt-price-price-standard'):
-        price=tr1.find('span', class_='hprt-price-price-standard').text.strip('\t\r\n\€xa')
-        price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
-    else :
-        text_file = open("soup_error_price.txt", "w")
-        text_file.write(str(hotel_soup))
-        text_file.close()
-        price=None
+    except:
+        try:
+            price=tr1.find('span', class_='hprt-price-price-standard').text.strip('\t\r\n\€xa')
+            price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
+        except :
+            price=None
        
     policy_opt=[]
     breakfast_opt=[]
@@ -496,7 +499,7 @@ def hotel_ratings_update(day_in,day_out,hotel_soup):
     except:
         very_poor_score=None
             
-    print(superb_score, good_score, average_score, poor_score, very_poor_score)
+    #print(superb_score, good_score, average_score, poor_score, very_poor_score)
 
     try:
         score_spec=hotel_soup.select('span.review_list_score_breakdown_col')[1]
@@ -556,7 +559,7 @@ def hotel_ratings_update(day_in,day_out,hotel_soup):
         n_ratings=int(re.sub('[^0-9,]', "", n_ratings))
     except:
         n_ratings=None
-    print(wifi_score,staff_score,services_score,n_ratings)
+    #print(wifi_score,staff_score,services_score,n_ratings)
 
     hotel_ratings=hotel_ratings(hotel_id,day_in,day_out,av_rating,n_ratings,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)
 
@@ -629,7 +632,6 @@ def hotel_reviews_update (headers, hotel_soup) :
                         neg_comment='empty'
                     try:
                         pos_comment=element.find('p', class_='review_pos').text.strip('\t\r\n\눇')
-                        print(pos_comment)
                     except:
                         pos_comment='empty'
         
@@ -657,12 +659,12 @@ def hotel_reviews_update (headers, hotel_soup) :
             #    return 0
     else:
         hotel_review=hotel_review(hotel_id,None,'na','na','na',None,None,None,None)
-        #try:
-        db_hotel_reviews_update(hotel_review)
-        #    print('single scraping and updating done in %0.3fs' % (time.time() - t0))
-        #    return 1
-        #except:
-        #    return 0
+        try:
+            db_hotel_reviews_update(hotel_review)
+            print('single scraping and updating done in %0.3fs' % (time.time() - t0))
+            return 1
+        except:
+            return 0
     print('single scraping done in %0.3fs' % (time.time() - t0))
 
   
@@ -686,7 +688,7 @@ def db_hotel_list_update(hotel_table) :
 	         );
                  COMMIT;'''
 
-    data = (i.hotel_name,i.location,i.hotel_address,i.hotel_id,i.hotel_type,i.hotel_star,i.hotel_facilities,i.hotel_id)
+    data = (i.hotel_name,i.dest_id,i.hotel_address,i.hotel_id,i.hotel_type,i.hotel_star,i.hotel_facilities,i.hotel_id)
 
     cur.execute(SQL, data)
 
@@ -832,7 +834,7 @@ try:
     key=readingdbkey()
     db_name=key['db_name']
     user_name=key['user_name']
-    p=input('Database %s with user %s: enter c to change db or user: '%(db_name,db_name))
+    p=input('Database %s with user %s: enter c to change db or user: '%(db_name,user_name))
     if p == 'c':
         db_name=input('Database name: ')
         user_name=input('User name: ')

@@ -41,7 +41,7 @@ def init_db():
     cur.execute(sql,data)
 
     sql = '''CREATE TABLE hotel_list (
-hotel_name VARCHAR(50), location VARCHAR(50), hotel_address VARCHAR(200), hotel_id INTEGER, hotel_type VARCHAR(20), hotel_star INTEGER, hotel_facilities VARCHAR(2000), loc_name VARCHAR(50), loc_type VARCHAR(10)
+hotel_name VARCHAR(80), location INTEGER, hotel_address VARCHAR(200), hotel_id INTEGER, hotel_type VARCHAR(20), hotel_star INTEGER, hotel_facilities VARCHAR(2000), loc_name VARCHAR(50), loc_type VARCHAR(10)
        ) 
        '''
    
@@ -52,7 +52,7 @@ hotel_name VARCHAR(50), location VARCHAR(50), hotel_address VARCHAR(200), hotel_
         print('error during hotel_list table creation')
 
     sql = '''CREATE TABLE hotel_data (
-hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, room_id INTEGER, room_type VARCHAR(50), room_size NUMERIC(4,0), price NUMERIC(8,2), breakfast_opt VARCHAR(500), policy_opt VARCHAR(500), room_left NUMERIC(2,0), room_facilities VARCHAR(1000), max_occ NUMERIC(2,0), inclusive VARCHAR(100),  non_inclusive VARCHAR (100)
+hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, room_id INTEGER, room_type VARCHAR(50), room_size NUMERIC(4,0), price NUMERIC(8,2), breakfast_opt VARCHAR(500), policy_opt VARCHAR(500), room_left NUMERIC(2,0), room_facilities VARCHAR(1000), max_occ NUMERIC(2,0), inclusive VARCHAR(300),  non_inclusive VARCHAR (300)
        ) 
        '''
     cur.execute(sql)
