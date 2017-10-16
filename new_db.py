@@ -66,7 +66,7 @@ hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, av_rating NUMERIC
     print('hotel_ratings table correctly created')
 
     sql = '''CREATE TABLE hotel_reviews (
-hotel_id INTEGER, positive_comment VARCHAR, negative_comment VARCHAR,post_date DATE, author_name VARCHAR(50),author_nat VARCHAR(50),author_group VARCHAR(50), score NUMERIC(4,2)
+hotel_id INTEGER, post_title VARCHAR(100), positive_comment VARCHAR, negative_comment VARCHAR,post_date DATE, author_name VARCHAR(50),author_nat VARCHAR(50),author_group VARCHAR(50), score NUMERIC(4,2)
        ) 
        '''
     cur.execute(sql)
