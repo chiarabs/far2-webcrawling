@@ -5,12 +5,16 @@
                Booking.com dynamic scraping
 ======================================================
 
-Hotel names, data, ratings and reviews are collected from 
-booking.com and stored in a postgres database.
+Hotel names, data, ratings and reviews are collected from booking.com and stored in a postgres database: 3 type of scraping are possible, corresponding to the database tables update
+
+-t for hotel_list update
+-tt for hotel_data update
+-ttt for hotel rating update
+-tttt for hotel_reviews update
+
+If connection db is not present yet, new_db.py will be run and a psql database will be created.
 
 Required packages: BeautifulSoup, request, fake_useragent, psycopg2.  
-
-If connection db is not present yet, run new_db.py
 
 """
 
@@ -24,7 +28,6 @@ import argparse
 import datetime
 import time
 import locale
-import new_db
 locale.setlocale(locale.LC_ALL, 'it_IT.utf8')
 
 parser = argparse.ArgumentParser()
@@ -256,10 +259,9 @@ def hotel_table_update(hotel_link,hotel_type,hotel_soup) :
     
 
     print("done in %0.3fs" % (time.time() - t0))
-    hotel_table=[hotel_table(hotel_id,hotel_type,hotel_name,hotel_address,dest_id,hotel_star,hotel_facilities)]
-    
+    hotel_table=hotel_table(hotel_id,hotel_type,hotel_name,hotel_address,dest_id,hotel_star,hotel_facilities)
     try:
-        db_hotel_table_update(hotel_table)
+        db_hotel_list_update(hotel_table)
         return 1
     except:
         return 0
@@ -286,10 +288,8 @@ def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
                 room_size=int(re.sub('[^0-9]', "", room_size))
             except:
                 try:
-                    #print(hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').select_one('div.info'))
-                    room_size=hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').find('strong',text='Supeficie camera:').nextSibling.text
+                    room_size=hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').select_one('div.info').select_one('strong').nextSibling.text
                     room_size=int(re.sub('[^0-9]', "", room_size))
-                    #print(room_size)
                 except:
                     room_size=None
 
@@ -505,7 +505,7 @@ def hotel_ratings_update(day_in,day_out,hotel_soup):
 
     try:
         breakfast_score=score_spec.find('li',{'data-question':'breakfast'}).find('p', class_='review_score_value').text
-        breakfast_score=float(re.sub('[^0-9,]', "", breakfas_score).replace(",", "."))
+        breakfast_score=float(re.sub('[^0-9,]', "", breakfast_score).replace(",", "."))
     except:
         breakfast_score=None
 
@@ -541,7 +541,7 @@ def hotel_ratings_update(day_in,day_out,hotel_soup):
 
     try:
         value_score=score_spec.find('li',{'data-question':'hotel_value'}).find('p', class_='review_score_value').text
-        value_score=float(value_score)
+        value_score=float(re.sub('[^0-9,]', "", value_score).replace(",", "."))
     except:
         value_score=None
 
@@ -558,8 +558,7 @@ def hotel_ratings_update(day_in,day_out,hotel_soup):
         n_ratings=None
     print(wifi_score,staff_score,services_score,n_ratings)
 
-    hotel_ratings=[hotel_ratings(hotel_id,day_in,day_out,av_rating,n_ratings,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)]
-    print(hotel_ratings[0])
+    hotel_ratings=hotel_ratings(hotel_id,day_in,day_out,av_rating,n_ratings,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)
 
     print('single scraping done in %0.3fs' % (time.time() - t0))
 
@@ -575,9 +574,10 @@ def hotel_ratings_update(day_in,day_out,hotel_soup):
 def hotel_reviews_update (headers, hotel_soup) :
     
     class hotel_review(object):
-        def __init__(self,hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group):
+        def __init__(self,hotel_id,score,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group):
             self.hotel_id=hotel_id
             self.score=score
+            self.post_title=post_title
             self.pos_comment=pos_comment
             self.neg_comment=neg_comment
             self.post_date=post_date
@@ -586,14 +586,6 @@ def hotel_reviews_update (headers, hotel_soup) :
             self.author_group=author_group
 
     t0 = time.time()
-            
-    score=[]
-    pos_comment=[]
-    neg_comment=[]
-    post_date=[]
-    author_name=[]
-    author_nat=[]
-    author_group=[]
 
     try:
         hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
@@ -614,80 +606,89 @@ def hotel_reviews_update (headers, hotel_soup) :
             try:
                 response = requests.get(link_to_rev,headers=headers).text
             except:
-                
                 return 0
-            review_soup=bs(response,'lxml')
-            for element in review_soup.find_all('div', class_='review_item_review_container'):
-                    single_score=element.find('span', class_="review-score-badge").text.strip('\t\r\n\€xa')
-                    score.append(float(re.sub('[^0-9,]', "",single_score).replace(",", ".")))
-                    if element.find('p', class_='review_neg'):
-                        neg_comment.append(element.find('p', class_='review_neg').text) #to do: remove 눇
-                    else:
-                        neg_comment.append('empty')
-                    if element.find('p', class_='review_pos'):
-                        pos_comment.append(element.find('p', class_='review_pos').text)
-                    else:
-                        pos_comment.append('empty')
-        
-            for element in review_soup.find_all('p', class_='review_item_date'):
-                post_date.append( datetime.datetime.strptime(element.text.strip('\t\r\n\€xa'),'%d %B %Y'))
-        
-            for element in review_soup.find_all('div', class_="review_item_reviewer"):
-                author_name.append(element.h4.text.strip('\t\r\n'))
-                if element.find('span', itemprop="nationality"):
-                    author_nat.append(element.find('span', itemprop="nationality").text.strip('\t\r\n'))
-                else:
-                    author_nat.append('unknown')
-                if element.find('div',class_='user_age_group'):
-                    author_group.append(element.find('div',class_='user_age_group').text.strip('\t\r\n'))
-                else:
-                    author_group.append('unknown')
-                
-        hotel_review=hotel_review(hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
-    else:
-        hotel_review=hotel_review(hotel_id,'empty','empty','empty','empty','empty','empty','empty')
-    print("done in %0.3fs" % (time() - t0))
 
-    hotel_review=[hotel_review(hotel_id,day_in,day_out,av_rating,n_ratings,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)]
-     
+            review_soup=bs(response,'lxml')
+            for element in review_soup.select('li.review_item.clearfix'):
+                try:
+                    post_date=element.select_one('p.review_item_date').text.strip('\t\r\n\€xa')
+                    post_date=datetime.datetime.strptime(post_date,'%d %B %Y')
+                except:
+                    post_date=None
+
+                for el in element.find_all('div', class_='review_item_review_container'):
+                    score=el.find('span', class_="review-score-badge").text.strip('\t\r\n\€xa')
+                    score=float(re.sub('[^0-9,]', "",score).replace(",", "."))
+                    try:
+                        post_title=el.find('span',itemprop='name').text.strip('\t\r\n')
+                    except:
+                        post_title='na'
+                    try:
+                        neg_comment=el.find('p', class_='review_neg').text.strip('\t\r\n\눇') #to do: remove 눇
+                    except:
+                        neg_comment='empty'
+                    try:
+                        pos_comment=element.find('p', class_='review_pos').text.strip('\t\r\n\눇')
+                        print(pos_comment)
+                    except:
+                        pos_comment='empty'
+        
+                for el in element.find_all('div', class_="review_item_reviewer"):
+                    try:
+                        author_name=el.h4.text.strip('\t\r\n')
+                    except:
+                        author_name='unknown'
+                    try:
+                        author_nat=el.find('span', itemprop="nationality").text.strip('\t\r\n')
+                    except:
+                        author_nat='unknown'
+                    try:
+                        author_group=el.find('div',class_='user_age_group').text.strip('\t\r\n')
+                    except:
+                        author_group='unknown'
+                
+            hotel_reviews=hotel_review(hotel_id,score,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
+            
+            #try:
+            db_hotel_reviews_update(hotel_reviews)
+            #    print('single scraping and updating done in %0.3fs' % (time.time() - t0))
+            #    return 1
+            #except:
+            #    return 0
+    else:
+        hotel_review=hotel_review(hotel_id,None,'na','na','na',None,None,None,None)
+        #try:
+        db_hotel_reviews_update(hotel_review)
+        #    print('single scraping and updating done in %0.3fs' % (time.time() - t0))
+        #    return 1
+        #except:
+        #    return 0
     print('single scraping done in %0.3fs' % (time.time() - t0))
 
-    try:
-        db_hotel_reviews_update(hotel_reviews)
-        print('single scraping and updating done in %0.3fs' % (time.time() - t0))
-        return 1
-    except:
-        return 0
+  
             
 ##################################################################################################
                         
-def db_hotel_list_update(hotel_table_list) :
+def db_hotel_list_update(hotel_table) :
 #connect to database "webcrawling", insert new row data in hotel_list table  if hotel_id is not present
     
     conn=psycopg2.connect('dbname='+db_name+' user='+user_name)
 
     cur=conn.cursor()
     
-    for i in hotel_table_list:
-        hotel_id=i.hotel_id
-        hotel_name=i.hotel_name
-        hotel_address=i.hotel_address
-        location=i.dest_id
-        hotel_type=i.hotel_type
-        hotel_star=i.hotel_star
-        hotel_facilities=i.hotel_facilities
-    
+    i=hotel_table
+     
         
-        SQL = '''BEGIN;
+    SQL = '''BEGIN;
                  INSERT INTO hotel_list (hotel_name,location,hotel_address,hotel_id,hotel_type,hotel_star,hotel_facilities)
 	         SELECT %s,%s,%s,%s,%s,%s,%s
 	         WHERE NOT EXISTS (SELECT hotel_id  FROM hotel_list WHERE hotel_id=%s
 	         );
                  COMMIT;'''
 
-        data = (hotel_name,location,hotel_address,hotel_id,hotel_type,hotel_star,hotel_facilities,hotel_id)
+    data = (i.hotel_name,i.location,i.hotel_address,i.hotel_id,i.hotel_type,i.hotel_star,i.hotel_facilities,i.hotel_id)
 
-        cur.execute(SQL, data)
+    cur.execute(SQL, data)
 
     cur.close()
     conn.close()
@@ -704,13 +705,13 @@ def db_hotel_data_update(hotel_data_list) :
     for i in hotel_data_list:
 
         SQL = '''BEGIN;
-                 UPDATE hotel_data SET hotel_id=(%s),day_in=(%s),day_out=(%s),room_id=(%s),room_type=(%s),room_size=(%s),room_facilities=(%s),inclusive=(%s),non_inclusive=(%s),price=(%s),breakfast_opt=(%s),policy_opt=(%s),max_occ=(%s),search_date=(%s) WHERE hotel_id=(%s) AND search_date=(%s);
+                 UPDATE hotel_data SET hotel_id=(%s),day_in=(%s),day_out=(%s),room_id=(%s),room_type=(%s),room_size=(%s),room_facilities=(%s),inclusive=(%s),non_inclusive=(%s),price=(%s),breakfast_opt=(%s),policy_opt=(%s),max_occ=(%s),search_date=(%s) WHERE price=(%s) AND search_date=(%s);
                  INSERT INTO hotel_data (hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,inclusive,non_inclusive,price,breakfast_opt,policy_opt,max_occ,search_date)
-	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_data WHERE hotel_id=(%s) AND search_date=(%s))
+	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_data WHERE price=(%s) AND search_date=(%s))
                  ;
                  COMMIT;'''
 
-        data = (i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date,i.hotel_id,i.search_date,i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date,i.hotel_id,i.search_date)
+        data = (i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date,i.price,i.search_date,i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date,i.price,i.search_date)
 
         cur.execute(SQL, data)
 
@@ -719,57 +720,49 @@ def db_hotel_data_update(hotel_data_list) :
 
 ####################################################################################
 
-def  db_hotel_reviews_update(hotel_reviews_list):
-#connect to database "webcrawling", insert new row data in hotel_data table
+def  db_hotel_reviews_update(hotel_reviews):
+#connect to database "webcrawling", insert new data in hotel_reviews table
     
+    i=hotel_reviews
+
     conn=psycopg2.connect('dbname='+db_name+' user='+user_name)
 
     cur=conn.cursor()
 
-    for i in hotel_reviews_list:
-        for j in range(0,len(i.pos_comment)):
-            hotel_id=i.hotel_id
-            score=i.score[j]
-            pos_comment=i.pos_comment[j]
-            neg_comment=i.neg_comment[j]
-            post_date=i.post_date[j]
-            author_name=i.author_name[j]
-            author_nat=i.author_nat[j]
-            author_group=i.author_group[j]
-    
-            SQL = '''BEGIN;
-                 INSERT INTO hotel_reviews (hotel_id,score,positive_comment,negative_comment,post_date,author_name,author_nat,author_group) 
-	         SELECT %s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXIST (SELECT (post_date,author_name) FROM hotel_reviews WHERE post_date=%s AND author_name=%s)
+ 
+    SQL = '''BEGIN;
+                 INSERT INTO hotel_reviews (hotel_id,score,post_title,positive_comment,negative_comment,post_date,author_name,author_nat,author_group) 
+	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_reviews WHERE post_date=(%s) AND author_name=(%s))
                  ;
                  COMMIT;'''
 
-            data = (hotel_id,score,pos_comment,neg_comment,post_date,author_name,author_nat,author_group,post_date,author_name)
+    data = (i.hotel_id,i.score,i.post_title,i.pos_comment,i.neg_comment,i.post_date,i.author_name,i.author_nat,i.author_group,i.post_date,i.author_name)
 
-            cur.execute(SQL, data)
+    cur.execute(SQL, data)
 
     cur.close()
     conn.close()
 
 ####################################################################################
 
-def db_hotel_ratings_update(hotel_ratings_list):
+def db_hotel_ratings_update(hotel_ratings):
 #connect to database "webcrawling", insert new row data in hotel_ratings table
    
     conn=psycopg2.connect('dbname='+db_name+' user='+user_name)
 
     cur=conn.cursor()
 
-    for i in hotel_ratings_list:
+    i=hotel_ratings
 
-        SQL = '''BEGIN;
+    SQL = '''BEGIN;
                  INSERT INTO hotel_ratings (hotel_id,day_in,day_out,av_rating,n_ratings,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score,search_date)
 	         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) 
                  ;
                  COMMIT;'''
 
-        data = (i.hotel_id,i.day_in,i.day_out,i.av_rating,i.n_ratings,i.superb_score,i.good_score,i.average_score,i.poor_score,i.very_poor_score,i.breakfast_score,i.clean_score,i.comfort_score,i.location_score,i.services_score,i.staff_score,i.value_score,i.wifi_score,i.search_date)
+    data = (i.hotel_id,i.day_in,i.day_out,i.av_rating,i.n_ratings,i.superb_score,i.good_score,i.average_score,i.poor_score,i.very_poor_score,i.breakfast_score,i.clean_score,i.comfort_score,i.location_score,i.services_score,i.staff_score,i.value_score,i.wifi_score,i.search_date)
 
-        cur.execute(SQL, data)
+    cur.execute(SQL, data)
 
     cur.close()
     conn.close()
@@ -843,13 +836,14 @@ try:
     if p == 'c':
         db_name=input('Database name: ')
         user_name=input('User name: ')
-        key={'db_name':db_name,'user_name':sys_user_name}
+        key={'db_name':db_name,'user_name':user_name}
         text_file = open("dbkey.txt", "w")
         text_file.write(str(key))
         text_file.close()
 except FileNotFoundError:
     p = input('No database key: create a new db (y)?  Or try to enter db name and user:')
     if p =='y':
+        import new_db
         init_db()
     else:
         db_name=input('Database name: ')
@@ -869,6 +863,7 @@ if args.scraping_type == 1 or args.scraping_type == 2 or args.scraping_type == 3
         while result == 0 and max_it<10:
             resutl=crawler(type_of_location,location,day_in,day_out)
             max_it+=1
+            print('Error during scraping: look at "Error_msg.txt"')
         print("global scraping and udating done in %0.3fs" % (time.time() - start))
 
 else:
