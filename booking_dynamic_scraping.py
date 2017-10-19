@@ -1,11 +1,11 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 """
 ======================================================
                Booking.com dynamic scraping
 ======================================================
 
-Hotel names, data, ratings and reviews are collected from booking.com and stored in a postgres database: 3 type of scraping are possible, corresponding to the database tables update
+Hotel names, data, ratings and reviews are collected from booking.com and stored in a postgres database: 4 type of scraping are possible, corresponding to the database tables update
 
 -t for hotel_list update
 -tt for hotel_data update
@@ -27,6 +27,7 @@ import psycopg2
 import argparse
 import datetime
 import time
+import os
 import locale
 locale.setlocale(locale.LC_ALL, 'it_IT.utf8')
 
@@ -71,7 +72,8 @@ def crawler(type_of_location,location,day_in,day_out):
     #loop  over all the pages containing research results iterating on the URL offset parameter
     #loop  stops when it finds error message "take control of your search"
     offset_range=15
-    for i in range(start_page,10): #set the number of visited pages 
+    for i in range(start_page,1): #set the number of visited pages 
+        resume('w',i)
         print('Page ',i)
         offset=i*offset_range
         #print(offset_range)
@@ -85,8 +87,9 @@ def crawler(type_of_location,location,day_in,day_out):
             return
         print (url)
         
-        max_it=1
-        while max_it<10:
+        n_iter=1
+        max_it=10
+        while n_iter<max_it:
             try:
                 response = requests.get(url, headers=headers).text
                 break
@@ -95,9 +98,9 @@ def crawler(type_of_location,location,day_in,day_out):
                 text_file = open("ConnectionError_msg.txt", "a")
                 text_file.write('Connection error: %s'%e)
                 text_file.close()
-                max_it+=1
+                n_iter+=1
                 time.sleep(10)
-        if max_it==10:
+        if n_iter==10:
             start_page=i
             return 'connection error'
 
@@ -137,8 +140,9 @@ def crawler(type_of_location,location,day_in,day_out):
             except:
                 hotel_type=None
             
-            max_it=1
-            while max_it<10:
+            n_iter=1
+            max_it=10
+            while n_iter<max_it:
                 try:
                     response = requests.get(hotel_link, headers=headers).text.strip('\t\r\n')
                     break
@@ -147,10 +151,10 @@ def crawler(type_of_location,location,day_in,day_out):
                     text_file = open("ConnectionError_msg.txt", "a")
                     text_file.write('Connection error: %s'%e)
                     text_file.close()
-                    max_it=max_it+1
+                    n_iter+=1
                     time.sleep(10)
                 
-            if max_it==10:
+            if n_iter==10:
                 start_page=i
                 return 0
 
@@ -292,7 +296,7 @@ def hotel_data_update (day_in,day_out,hotel_link,hotel_soup):
                 room_size=int(re.sub('[^0-9]', "", room_size))
             except:
                 try:
-                    room_size=hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').select_one('div.info').select_one('strong').nextSibling.text
+                    room_size=hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').select_one('div.info').select_one('strong').nextSibling
                     room_size=int(re.sub('[^0-9]', "", room_size))
                 except:
                     room_size=None
@@ -331,7 +335,8 @@ def room_get_main_data (tr,room_size):
             self.room_inc0=room_inc0
    
     room_id=tr.select_one('div.rt-room-info')['id']
-    
+
+    room_facilities=[]
     if tr.select_one('a.jqrt'):
         room_type=tr.select_one('a.jqrt')['data-room-name-en']
     else:
@@ -346,7 +351,7 @@ def room_get_main_data (tr,room_size):
                 continue
     except:
         room_facilities=None
-    room_facilities=[]
+    
     
 
     room_inc1=None
@@ -365,7 +370,7 @@ def room_get_main_data (tr,room_size):
         except:
             print('no room size')
             room_size=None
-    
+   
     return room_main_data(room_id,room_type,room_size,room_facilities,room_inc1,room_inc0)
 
 ##############################################################################################
@@ -596,13 +601,12 @@ def hotel_reviews_update (headers, hotel_soup) :
         return 0
     print(hotel_id)
 
-    if hotel_soup.find('a', class_='show_all_reviews_btn'):
+    try:
         link_to_rev=hotel_soup.find('a', class_='show_all_reviews_btn')['href']
-     
         link_to_rev=base_url+link_to_rev
         print(link_to_rev)
 
-        for i in range (1,2): #set number of reviews visited pages
+        for i in range (1,2): #set number of review visited pages
 
             link_to_rev=link_to_rev+';page='+str(i)
 
@@ -620,8 +624,11 @@ def hotel_reviews_update (headers, hotel_soup) :
                     post_date=None
 
                 for el in element.find_all('div', class_='review_item_review_container'):
-                    score=el.find('span', class_="review-score-badge").text.strip('\t\r\n\€xa')
-                    score=float(re.sub('[^0-9,]', "",score).replace(",", "."))
+                    try:
+                        score=el.find('span', class_="review-score-badge").text.strip('\t\r\n\€xa')
+                        score=float(re.sub('[^0-9,]', "",score).replace(",", "."))
+                    except:
+                        score=None
                     try:
                         post_title=el.find('span',itemprop='name').text.strip('\t\r\n')
                     except:
@@ -651,13 +658,13 @@ def hotel_reviews_update (headers, hotel_soup) :
                 
             hotel_reviews=hotel_review(hotel_id,score,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
             
-            #try:
-            db_hotel_reviews_update(hotel_reviews)
-            #    print('single scraping and updating done in %0.3fs' % (time.time() - t0))
-            #    return 1
-            #except:
-            #    return 0
-    else:
+            try:
+                db_hotel_reviews_update(hotel_reviews)
+                print('single scraping and updating done in %0.3fs' % (time.time() - t0))
+                return 1
+            except:
+                return 0
+    except:
         hotel_review=hotel_review(hotel_id,None,'na','na','na',None,None,None,None)
         try:
             db_hotel_reviews_update(hotel_review)
@@ -810,22 +817,33 @@ def readingdbkey():
         return key
    
 ####################################################################################
+
+def resume(opt,var=''):
+    if opt == 'w':
+        text_file = open("backup.txt", "w")
+        text_file.write(str(var))
+        text_file.close()
+    elif opt =='r':
+        with open('backup.txt', 'r') as f:
+            s = f.read()
+            var=eval(s)
+            return var
+    
+####################################################################################
 start=time.time()
 
 #research_options
 day_in_str='2017-12-20'
-day_out_str='2017-12-27'
+
+delta_day_out=7
+delta_days=7
+date_iter=4
 
 type_of_location='city'     #set = 'city' or 'region'
 location='Aosta'
 
-day_in = datetime.datetime.strptime(day_in_str,'%Y-%m-%d')
-day_out= datetime.datetime.strptime(day_out_str, '%Y-%m-%d')
 
 print(__doc__)
-
-
-
 
 global start_page
 start_page=0
@@ -855,20 +873,43 @@ except FileNotFoundError:
         text_file.write(str(key))
         text_file.close()
 
-max_it=0 #fix the max number of request attempt
-if args.scraping_type == 1 or args.scraping_type == 2 or args.scraping_type == 3 or args.scraping_type == 4:
-    print('type of scraping: ',args.scraping_type)
-    result=crawler(type_of_location,location,day_in,day_out)
-    if result == 'connection error':
-        print('connection error at ',start_page)
+try:
+    start_page=resume('r')
+    print('\nLast section was stopped at page ', start_page)
+    res=input('\nDo you want to restart from there? Y/N (backup file will be erased)\n')
+    if res=='Y':
+        pass
     else:
-        while result == 0 and max_it<10:
-            resutl=crawler(type_of_location,location,day_in,day_out)
-            max_it+=1
-            print('Error during scraping: look at "Error_msg.txt"')
-        print("global scraping and udating done in %0.3fs" % (time.time() - start))
+        os.remove('backup.txt')
+        start_page=0
+except:
+    pass
+# loop on date search
+day_in = datetime.datetime.strptime(day_in_str,'%Y-%m-%d')
+day_out = datetime.datetime.strptime(day_in_str, '%Y-%m-%d')+datetime.timedelta(days=delta_day_out)
 
-else:
-    print("chose type of scraping, -h for help")
+# loop on date search
+for i in range (0,date_iter):
+    n_iter=0 
+    max_it=10 #fix the max number of request attempt
+    if args.scraping_type == 1 or args.scraping_type == 2 or args.scraping_type == 3 or args.scraping_type == 4:
+        print('type of scraping: ',args.scraping_type)
+        result=crawler(type_of_location,location,day_in,day_out)
+        if result == 'connection error':
+            print('connection error at ',start_page)
+        else:
+            while result == 0 and n_iter<max_it: 
+                resutl=crawler(type_of_location,location,day_in,day_out)
+                n_iter+=1
+                print('Error during scraping: look at "Error_msg.txt"')
+            os.remove('backup.txt')
+            print("global scraping and udating done in %0.3fs" % (time.time() - start))
+
+    else:
+        print("chose type of scraping, -h for help")
+
+    day_in=day_in+datetime.timedelta(days=delta_days)
+    day_out=day_out+datetime.timedelta(days=delta_days)
+       
 
 
