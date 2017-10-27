@@ -12,7 +12,7 @@ Starting from a hotel list, hotel names, data, ratings and reviews are collected
 -ttt for hotel rating update
 -tttt for hotel_reviews update
 
-If connection db is not present yet, new_db.py will be run and a psql database will be created.
+If connection db is not present yet, conn_db.py will be run and a psql database will be created.
 
 Required packages: BeautifulSoup, request, fake_useragent, psycopg2.  
 
@@ -39,19 +39,17 @@ base_url='http://www.booking.com'
 
 def crawler(link_list,day_in,day_out):
     
-    ti=time.time()
-
-    base_url='http://www.booking.com'
-    
     global n_link
-    
+        
+    path=os.path.dirname(os.path.abspath(__file__))
+
     #cleaning error msg
     try:
-        os.remove('ConnectionError_msg.txt') 
+        os.remove(os.path.join(path,'ConnectionError_msg.txt')) 
     except:
         pass
     try:
-        os.remove('Error_msg.txt')
+        os.remove(os.path.join(path,'Error_msg.txt'))
     except:
         pass
 
@@ -65,12 +63,11 @@ def crawler(link_list,day_in,day_out):
 
     headers={'User-Agent': ua.random}
     print (headers)
-  
     #loop  over all the link contained in link_list
-    for n_link, link in enumerate(link_list,n_link): 
-        resume('w',str(n_link))
+    for idx_link , link in enumerate(link_list[n_link:]): 
+        resume('w',[idx_link+n_link,day_in])
         print(link[0])
-        print(n_link)
+        print('link: ',idx_link+n_link+1, 'for date: ', day_in, ' - ',day_out )
 
         hotel_link=base_url+link[0]+'?;checkin='+str(day_in)+';checkout='+str(day_out)
         print (hotel_link)
@@ -83,7 +80,7 @@ def crawler(link_list,day_in,day_out):
                 break
             except requests.exceptions.RequestException as e:  
                 print (e,' attempt n. ',max_it)
-                text_file = open("ConnectionError_msg.txt", "a")
+                text_file = open(os.path.join(path,"ConnectionError_msg.txt"), "a")
                 text_file.write('\nConnection error: %s'%e)
                 text_file.close()
                 n_iter+=1
@@ -96,7 +93,7 @@ def crawler(link_list,day_in,day_out):
         if args.scraping_type < 2:
             hotel_table_check=hotel_table_update(hotel_link,link[0],None,soup)
             if hotel_table_check==0:
-                text_file = open("Error_msg.txt", "a")
+                text_file = open(os.path.join(path,"Error_msg.txt"), "a")
                 text_file.write('Hotel_table_update: error getting data for %s'%hotel_link)
                 text_file.close()
                 return 0
@@ -104,9 +101,9 @@ def crawler(link_list,day_in,day_out):
                 continue
 
         if args.scraping_type == 2:   
-            hotel_data_check=hotel_data_update(day_in,day_out,soup)
+            hotel_data_check=hotel_data_update(day_in,day_out,link[0],soup)
             if hotel_data_check==0:
-                text_file = open("Error_msg.txt", "a")
+                text_file = open(os.path.join(path,"Error_msg.txt"), "a")
                 text_file.write('\nHotel_data_update: error getting data for %s '%hotel_link)
                 text_file.close()
                 return 0
@@ -114,9 +111,9 @@ def crawler(link_list,day_in,day_out):
                 continue
 
         elif args.scraping_type == 3:   
-            hotel_ratings_check=hotel_ratings_update(day_in,day_out,soup)
+            hotel_ratings_check=hotel_ratings_update(day_in,day_out,link[0],soup)
             if hotel_ratings_check==0:
-                text_file = open("Error_msg.txt", "a")
+                text_file = open(os.path.join(path,"Error_msg.txt"), "a")
                 text_file.write('\nHotel_ratings_update: error getting data for %s'%hotel_link)
                 text_file.close()
                 return 0
@@ -124,16 +121,15 @@ def crawler(link_list,day_in,day_out):
                 continue
 
         elif args.scraping_type == 4:
-            hotel_reviews_check=hotel_reviews_update(headers,soup)
+            hotel_reviews_check=hotel_reviews_update(headers,link[0],soup)
             if hotel_reviews_check==0:
-                text_file = open("Error_msg.txt", "a")
+                text_file = open(os.path.join(path,"Error_msg.txt"), "a")
                 text_file.write('\nHotel_reviews_update: error getting data for %s'%hotel_link)
                 text_file.close()
                 return 0
             else:
                 continue
-
-    print("scraping done in %0.3fs" % (time.time() - ti))
+    
     return 1
 
 ##################################################################################################
@@ -208,16 +204,16 @@ def hotel_table_update(hotel_link,link,hotel_type,hotel_soup) :
 
 ######################################################################################################
 
-def hotel_data_update (day_in,day_out,hotel_soup):
+def hotel_data_update (day_in,day_out,link,hotel_soup):
     t0 = time.time()   
     try:
         hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
     except: 
         print('error: no hotel_id')
         text_file = open("Error_msg.txt", "a")
-        text_file.write('\nNo id found for %s'%hotel_link)
+        text_file.write('\nNo id found for %s'%link)
         text_file.close()
-        hotel_id=None
+        return 
 
     room_list=[]
     if hotel_soup.find(id='room_availability_container'):
@@ -366,7 +362,7 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
 
 #######################################################################################################
 
-def hotel_ratings_update(day_in,day_out,hotel_soup):
+def hotel_ratings_update(day_in,day_out,link,hotel_soup):
     
     class hotel_ratings(object):
         def __init__(self,hotel_id,day_in,day_out,av_rating,n_ratings,superb_score,good_score,average_score,poor_score,very_poor_score,brakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score):
@@ -397,9 +393,9 @@ def hotel_ratings_update(day_in,day_out,hotel_soup):
         hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
     except: 
         text_file = open("Error_msg.txt", "a")
-        text_file.write('\nNo id found for %s'%hotel_link)
+        text_file.write('\nNo id found for %s'%link)
         text_file.close()
-        hotel_id=None
+        return
 
     if hotel_soup.find('span', class_='review-score-badge'):
         av_rating=hotel_soup.find('span', class_='review-score-badge').text.strip('\t\r\n')
@@ -517,7 +513,7 @@ def hotel_ratings_update(day_in,day_out,hotel_soup):
 
 #########################################################################################################
 
-def hotel_reviews_update (headers, hotel_soup) :
+def hotel_reviews_update (headers,link,hotel_soup) :
     
     class hotel_review(object):
         def __init__(self,hotel_id,score,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group):
@@ -537,9 +533,9 @@ def hotel_reviews_update (headers, hotel_soup) :
         hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
     except: 
         text_file = open("Error_msg.txt", "a")
-        text_file.write('\nNo id found for %s'%hotel_link)
+        text_file.write('\nNo id found for %s'%link)
         text_file.close()
-        hotel_id=None
+        return
     print(hotel_id)
 
     try:
@@ -658,11 +654,11 @@ def db_hotel_data_update(hotel_data_list) :
         SQL = '''BEGIN;
                  UPDATE hotel_data SET hotel_id=(%s),day_in=(%s),day_out=(%s),room_id=(%s),room_type=(%s),room_size=(%s),room_facilities=(%s),inclusive=(%s),non_inclusive=(%s),price=(%s),breakfast_opt=(%s),policy_opt=(%s),max_occ=(%s),search_date=(%s) WHERE price=(%s) AND search_date=(%s);
                  INSERT INTO hotel_data (hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,inclusive,non_inclusive,price,breakfast_opt,policy_opt,max_occ,search_date)
-	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_data WHERE price=(%s) AND search_date=(%s))
+	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_data WHERE price=(%s) AND day_in=(%s) AND day_out=(%s) AND search_date=(%s))
                  ;
                  COMMIT;'''
 
-        data = (i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date,i.price,i.search_date,i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date,i.price,i.search_date)
+        data = (i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date,i.price,i.search_date,i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date,i.price,i.day_in,i.day_out,i.search_date)
 
         cur.execute(SQL, data)
 
@@ -743,7 +739,10 @@ def db_hotel_link():
 ###################################################################################
 
 def readingdbkey():
-    with open('dbkey.txt', 'r') as f:
+    path=os.path.dirname(os.path.abspath(__file__))
+    print(path)
+    dbkey=os.path.join(path,'dbkey.txt')
+    with open(dbkey, 'r') as f:
         s = f.read()
         key=eval(s)
         return key
@@ -751,12 +750,14 @@ def readingdbkey():
 ####################################################################################
 
 def resume(opt,var=''):
+    path=os.path.dirname(os.path.abspath(__file__))
+    backup=os.path.join(path,'backup.txt')
     if opt == 'w':
-        text_file = open("backup.txt", "w")
+        text_file = open(backup, "w")
         text_file.write(str(var))
         text_file.close()
     elif opt =='r':
-        with open('backup.txt', 'r') as f:
+        with open(backup, 'r') as f:
             s = f.read()
             var=eval(s)
             return var
@@ -777,25 +778,30 @@ global n_link
 n_link=0
 
 import conn_db
-try:   
-    key=readingdbkey()
-    db_name=key['db_name']
-    user_name=key['user_name']
-except:
-    key=db_key_mod()
+#try:   
+key=readingdbkey()
+db_name=key['db_name']
+user_name=key['user_name']
+#except:
+    #key=db_key_mod()
 
+day_in_def=day_in_str
 try:
-    n_link=resume('r')
-    print('\nLast section was stopped at link ', n_link)
+    var = resume('r')
+    n_link=int(var[0])
+    day_in_str=str(var[1])
+    print('\nLast section was stopped at link ', n_link+1, 'for day_in: ',day_in_str)
     import sys, select
-    print('\nPress "ent" to restart from there, or a default start will be done\n') #add wait time -->deafult N
+    print('\nPress "ent" to restart from there, or a default start will be done\n') # wait time -->deafult Nlink start
     i, o, e = select.select( [sys.stdin], [], [], 10 )
     if (i):
-        print ('Restating from', n_link)
+        print ('Restating from', n_link+1)
     else:
         print ('Default start')
         os.remove('backup.txt')
         n_link=0
+        day_in_str=day_in_def
+        
 except:
     pass
 
