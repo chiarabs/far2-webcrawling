@@ -60,7 +60,7 @@ hotel_name VARCHAR(80), location INTEGER, hotel_address VARCHAR(200), hotel_id I
         pass
 
     sql = '''CREATE TABLE hotel_data (
-hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, room_id INTEGER, room_type VARCHAR(50), room_size NUMERIC(4,0), price NUMERIC(8,2), breakfast_opt VARCHAR(500), policy_opt VARCHAR(500), room_left NUMERIC(2,0), room_facilities VARCHAR(1000), max_occ NUMERIC(2,0), inclusive VARCHAR(300),  non_inclusive VARCHAR (300)
+hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, room_id INTEGER, room_type VARCHAR(100), room_size NUMERIC(4,0), price NUMERIC(8,2), breakfast_opt VARCHAR(500), policy_opt VARCHAR(500), room_left NUMERIC(2,0), room_facilities VARCHAR(1000), max_occ NUMERIC(2,0), inclusive VARCHAR(300),  non_inclusive VARCHAR (300)
        ) 
        '''
     cur.execute(sql)
