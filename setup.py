@@ -14,7 +14,7 @@ setup(
         '': ['hotel_link_list.csv','search_opt.txt'],
         # And include any *.msg files found in the 'hello' package, too:
       #  'hello': ['*.msg'],
-    },
+    })
 
     # metadata for upload to PyPI
     #author="",
