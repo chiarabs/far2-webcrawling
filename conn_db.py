@@ -2,8 +2,11 @@
 import psycopg2 as ps
 import subprocess
 import getpass
+import os
 
 def init_db():
+    
+    path=os.path.dirname(os.path.abspath(__file__))
 
     subprocess.check_output(['which psql'], shell=True)
     psql_check=subprocess.check_output(['echo $?'], shell=True)
@@ -53,14 +56,15 @@ hotel_name VARCHAR(80), location INTEGER, hotel_address VARCHAR(200), hotel_id I
         print('error during hotel_list table creation')
     
     try:
+        pathfile=os.path.join(path,'hotel_link_list.csv')
         sql=  '\copy hotel_list ( hotel_link ) FROM %s WITH CSV HEADER;'
-        data=('hotel_link_list.csv',)
+        data=(pathfile,)
         cur.excecute(sql,data)
     except:
         pass
 
     sql = '''CREATE TABLE hotel_data (
-hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, room_id INTEGER, room_type VARCHAR(100), room_size NUMERIC(4,0), price NUMERIC(8,2), breakfast_opt VARCHAR(500), policy_opt VARCHAR(500), room_left NUMERIC(2,0), room_facilities VARCHAR(1000), max_occ NUMERIC(2,0), inclusive VARCHAR(300),  non_inclusive VARCHAR (300)
+hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, room_id INTEGER, room_type VARCHAR(100), room_size NUMERIC(4,0), price NUMERIC(8,2), breakfast_opt VARCHAR(500), policy_opt VARCHAR(500), room_left NUMERIC(2,0), room_facilities VARCHAR(1000), max_occ NUMERIC(2,0), inclusive VARCHAR(300),  non_inclusive VARCHAR (300), sale NUMERIC(2,0)
        ) 
        '''
     cur.execute(sql)
@@ -74,7 +78,7 @@ hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, av_rating NUMERIC
     print('hotel_ratings table correctly created')
 
     sql = '''CREATE TABLE hotel_reviews (
-hotel_id INTEGER, post_title VARCHAR(100), positive_comment VARCHAR, negative_comment VARCHAR,post_date DATE, author_name VARCHAR(50),author_nat VARCHAR(50),author_group VARCHAR(50), score NUMERIC(4,2)
+hotel_id INTEGER, lan VARCHAR(5), post_title VARCHAR(100), positive_comment VARCHAR, negative_comment VARCHAR,post_date DATE, author_name VARCHAR(50),author_nat VARCHAR(50),author_group VARCHAR(50), score NUMERIC(4,2)
        ) 
        '''
     cur.execute(sql)
@@ -84,8 +88,9 @@ hotel_id INTEGER, post_title VARCHAR(100), positive_comment VARCHAR, negative_co
     cur.close()
     con.close()
     
+    dbkey=os.path.join(path,'dbkey.txt')
     key={'db_name':db_name,'user_name':sys_user_name}
-    text_file = open("dbkey.txt", "w")
+    text_file = open(dbkey, "w")
     text_file.write(str(key))
     text_file.close()
 
@@ -93,11 +98,13 @@ hotel_id INTEGER, post_title VARCHAR(100), positive_comment VARCHAR, negative_co
 ##################################################################################
 
 def readingdbkey():
-    with open('dbkey.txt', 'r') as f:
+    path=os.path.dirname(os.path.abspath(__file__))
+    dbkey=os.path.join(path,'dbkey.txt')
+    with open(dbkey, 'r') as f:
         s = f.read()
         key=eval(s)
         return key
-
+   
 #################################################################################
 def db_key_mod():
 
@@ -110,7 +117,7 @@ def db_key_mod():
             db_name=input('Database name: ')
             user_name=input('User name: ')
             key={'db_name':db_name,'user_name':user_name}
-            text_file = open("dbkey.txt", "w")
+            text_file = open('dbkey.txt', "w")
             text_file.write(str(key))
             text_file.close()
     except FileNotFoundError:
@@ -121,7 +128,7 @@ def db_key_mod():
             db_name=input('Database name: ')
             user_name=input('User name: ')
             key={'db_name':db_name,'user_name':user_name}
-            text_file = open("dbkey.txt", "w")
+            text_file = open('dbkey.txt', "w")
             text_file.write(str(key))
             text_file.close()
     return key
