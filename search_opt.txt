@@ -1,0 +1,8 @@
+{
+'day_in_str':"2017-11-26",
+'delta_day_out':7,
+'delta_days':7,
+'date_iter':5,
+'type_of_location':"city" ,    #set = 'city' or 'region'
+'location':"Aosta"
+}
