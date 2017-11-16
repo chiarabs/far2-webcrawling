@@ -37,10 +37,10 @@ args = parser.parse_args()
     
 base_url='http://www.booking.com'
 
-def crawler(link_list,day_in,day_out):
+def crawler(link_list,day_in,day_out,date_iter): 
     
     global n_link
-        
+
     path=os.path.dirname(os.path.abspath(__file__))
 
     #cleaning error msg
@@ -54,18 +54,20 @@ def crawler(link_list,day_in,day_out):
         pass
 
     #setting random user agent
-    #ua = UserAgent()
     try:
         ua = UserAgent()
     except FakeUserAgentError:
         print("\nConnection error, please verify your connection")
         return 'connection error'
-
-    headers={'User-Agent': ua.random}
+        
+    try:
+        headers={'User-Agent': ua.random}
+    except:
+        headers={'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:56.0) Gecko/20100101 Firefox/56.0'}
     print (headers)
     #loop  over all the link contained in link_list
     for idx_link , link in enumerate(link_list[n_link:]): 
-        resume('w',[idx_link+n_link,day_in])
+        resume('w',[date_iter,idx_link+n_link,day_in])
         print(link[0])
         print('link: ',idx_link+n_link+1, 'for date: ', day_in, ' - ',day_out )
 
@@ -309,7 +311,7 @@ def room_get_main_data (tr,room_size):
 def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
     d=room_data
     class room_all_data(object):
-        def __init__(self,hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,room_inc1,room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left):
+        def __init__(self,hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,room_inc1,room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left,sale):
             self.hotel_id=hotel_id
             self.day_in=day_in
             self.day_out=day_out
@@ -325,9 +327,10 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
             self.policy_opt=policy_opt
             self.max_occ=max_occ
             self.room_left=room_left
+            self.sale=sale
     
     if tr1 == 'no av room' and room_data == 'no room' :
-        return room_all_data(hotel_id,day_in,day_out,None,'no av room',None,None,None,None,None,None,None,None,None)
+        return room_all_data(hotel_id,day_in,day_out,None,'no av room',None,None,None,None,None,None,None,None,None,None)
 
     try:
         price=tr1.select_one('strong.js-track-hp-rt-room-price').text.strip('\t\r\n\€xa')
@@ -338,6 +341,11 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
             price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
         except :
             price=None
+    try:
+        sale=tr1.select_one('label.save-percentage__label').text.strip('\t\r\n')
+        sale=int(re.sub('[0-9]',"",sale))
+    except:
+        sale=None
        
     policy_opt=[]
     breakfast_opt=[]
@@ -358,7 +366,7 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
     except:
         room_left=None
     #print(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left)
-    return room_all_data(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left)
+    return room_all_data(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left,sale)
 
 #######################################################################################################
 
@@ -516,9 +524,10 @@ def hotel_ratings_update(day_in,day_out,link,hotel_soup):
 def hotel_reviews_update (headers,link,hotel_soup) :
     
     class hotel_review(object):
-        def __init__(self,hotel_id,score,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group):
+        def __init__(self,hotel_id,score,lan,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group):
             self.hotel_id=hotel_id
             self.score=score
+            self.lan=lan
             self.post_title=post_title
             self.pos_comment=pos_comment
             self.neg_comment=neg_comment
@@ -541,68 +550,85 @@ def hotel_reviews_update (headers,link,hotel_soup) :
     try:
         link_to_rev=hotel_soup.find('a', class_='show_all_reviews_btn')['href']
         link_to_rev=base_url+link_to_rev
-        print(link_to_rev)
+       
+        language=['fr']#['it','fr','en']
+        for lan in language:
+            print(lan)
+            for i in range (1,3): #set number of review visited pages
+               
+                link_to_rev=link_to_rev+';page='+str(i)+';r_lang='+lan
+                print(link_to_rev)
 
-        for i in range (1,2): #set number of review visited pages
-
-            link_to_rev=link_to_rev+';page='+str(i)
-
-            try:
-                response = requests.get(link_to_rev,headers=headers).text
-            except:
-                return 0
-
-            review_soup=bs(response,'lxml')
-            for element in review_soup.select('li.review_item.clearfix'):
                 try:
-                    post_date=element.select_one('p.review_item_date').text.strip('\t\r\n\€xa')
-                    post_date=datetime.datetime.strptime(post_date,'%d %B %Y')
+                    response = requests.get(link_to_rev,headers=headers).text
                 except:
-                    post_date=None
+                    return 0
 
-                for el in element.find_all('div', class_='review_item_review_container'):
+                review_soup=bs(response,'lxml')
+                try:
+                    pg=review_soup.select('p.page_showing').text
+                    first_show=[int(s) for s in pg.split() if s.isdigit()][0]
+                    last_show=[int(s) for s in pg.split() if s.isdigit()][1]
+                    diff_pg=last_show-(first_show-1)
+                    if diff_pg<0:
+                        print('offset out of range:serch end')
+                        break
+                except:
+                    print('no results found')
+                    break
+                    
+                for element in review_soup.select('li.review_item.clearfix'):
                     try:
-                        score=el.find('span', class_="review-score-badge").text.strip('\t\r\n\€xa')
-                        score=float(re.sub('[^0-9,]', "",score).replace(",", "."))
+                        post_date=element.select_one('p.review_item_date').text.strip('\t\r\n\€xa')
+                        post_date=datetime.datetime.strptime(post_date,'%d %B %Y')
                     except:
-                        score=None
-                    try:
-                        post_title=el.find('span',itemprop='name').text.strip('\t\r\n')
-                    except:
-                        post_title='na'
-                    try:
-                        neg_comment=el.find('p', class_='review_neg').text.strip('\t\r\n\눇') #to do: remove 눇
-                    except:
-                        neg_comment='empty'
-                    try:
-                        pos_comment=element.find('p', class_='review_pos').text.strip('\t\r\n\눇')
-                    except:
-                        pos_comment='empty'
+                        post_date=None
+
+                    for el in element.find_all('div', class_='review_item_review_container'):
+                        try:
+                            score=el.find('span', class_="review-score-badge").text.strip('\t\r\n\€xa')
+                            score=float(re.sub('[^0-9,]', "",score).replace(",", "."))
+                            if score>11.:
+                                print('this score is bigger than 10', link_to_rev)
+                        except:
+                            score=None
+                        try:
+                            post_title=el.find('span',itemprop='name').text.strip('\t\r\n\눉\눇')
+                        except:
+                            post_title=''
+                        try:
+                            neg_comment=el.find('p', class_='review_neg').text.strip('\t\r\n\눇\눉') #to do: remove 눇
+                        except:
+                            neg_comment=''
+                        try:
+                            pos_comment=element.find('p', class_='review_pos').text.strip('\t\r\n\눇\눉')
+                        except:
+                            pos_comment=''
         
-                for el in element.find_all('div', class_="review_item_reviewer"):
-                    try:
-                        author_name=el.h4.text.strip('\t\r\n')
-                    except:
-                        author_name='unknown'
-                    try:
-                        author_nat=el.find('span', itemprop="nationality").text.strip('\t\r\n')
-                    except:
-                        author_nat='unknown'
-                    try:
-                        author_group=el.find('div',class_='user_age_group').text.strip('\t\r\n')
-                    except:
-                        author_group='unknown'
+                    for el in element.find_all('div', class_="review_item_reviewer"):
+                        try:
+                            author_name=el.h4.text.strip('\t\r\n')
+                        except:
+                            author_name='unknown'
+                        try:
+                            author_nat=el.find('span', itemprop="nationality").text.strip('\t\r\n')
+                        except:
+                            author_nat='unknown'
+                        try:
+                            author_group=el.find('div',class_='user_age_group').text.strip('\t\r\n')
+                        except:
+                            author_group='unknown'
                 
-            hotel_reviews=hotel_review(hotel_id,score,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
+                    hotel_reviews=hotel_review(hotel_id,score,lan,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
             
-            try:
-                db_hotel_reviews_update(hotel_reviews)
-                print('single scraping and updating done in %0.3fs' % (time.time() - t0))
-                return 1
-            except:
-                return 0
+                    try:
+                        db_hotel_reviews_update(hotel_reviews)
+                        print('single scraping and updating done in %0.3fs' % (time.time() - t0))
+                        return 1
+                    except:
+                        return 0
     except:
-        hotel_review=hotel_review(hotel_id,None,'na','na','na',None,None,None,None)
+        hotel_review=hotel_review(hotel_id,None,None,'','','',None,None,None,None)
         try:
             db_hotel_reviews_update(hotel_review)
             print('single scraping and updating done in %0.3fs' % (time.time() - t0))
@@ -652,13 +678,13 @@ def db_hotel_data_update(hotel_data_list) :
     for i in hotel_data_list:
 
         SQL = '''BEGIN;
-                 UPDATE hotel_data SET hotel_id=(%s),day_in=(%s),day_out=(%s),room_id=(%s),room_type=(%s),room_size=(%s),room_facilities=(%s),inclusive=(%s),non_inclusive=(%s),price=(%s),breakfast_opt=(%s),policy_opt=(%s),max_occ=(%s),search_date=(%s) WHERE price=(%s) AND search_date=(%s);
-                 INSERT INTO hotel_data (hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,inclusive,non_inclusive,price,breakfast_opt,policy_opt,max_occ,search_date)
-	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_data WHERE price=(%s) AND day_in=(%s) AND day_out=(%s) AND search_date=(%s))
+                 UPDATE hotel_data SET hotel_id=(%s),day_in=(%s),day_out=(%s),room_id=(%s),room_type=(%s),room_size=(%s),room_facilities=(%s),inclusive=(%s),non_inclusive=(%s),price=(%s),breakfast_opt=(%s),policy_opt=(%s),max_occ=(%s),sale=(%s),search_date=(%s) WHERE price=(%s) AND day_in=(%s) AND day_out=(%s) AND search_date=(%s);
+                 INSERT INTO hotel_data (hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,inclusive,non_inclusive,price,breakfast_opt,policy_opt,max_occ,sale,search_date)
+	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_data WHERE price=(%s) AND day_in=(%s) AND day_out=(%s) AND search_date=(%s))
                  ;
                  COMMIT;'''
 
-        data = (i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date,i.price,i.search_date,i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.search_date,i.price,i.day_in,i.day_out,i.search_date)
+        data = (i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.sale,i.search_date,i.price,i.day_in,i.day_out,i.search_date,i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.sale,i.search_date,i.price,i.day_in,i.day_out,i.search_date)
 
         cur.execute(SQL, data)
 
@@ -678,12 +704,12 @@ def  db_hotel_reviews_update(hotel_reviews):
 
  
     SQL = '''BEGIN;
-                 INSERT INTO hotel_reviews (hotel_id,score,post_title,positive_comment,negative_comment,post_date,author_name,author_nat,author_group) 
-	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_reviews WHERE post_date=(%s) AND author_name=(%s))
+                 INSERT INTO hotel_reviews (hotel_id,score,lan,post_title,positive_comment,negative_comment,post_date,author_name,author_nat,author_group) 
+	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_reviews WHERE post_date=(%s) AND author_name=(%s))
                  ;
                  COMMIT;'''
 
-    data = (i.hotel_id,i.score,i.post_title,i.pos_comment,i.neg_comment,i.post_date,i.author_name,i.author_nat,i.author_group,i.post_date,i.author_name)
+    data = (i.hotel_id,i.score,i.lan,i.post_title,i.pos_comment,i.neg_comment,i.post_date,i.author_name,i.author_nat,i.author_group,i.post_date,i.author_name)
 
     cur.execute(SQL, data)
 
@@ -736,22 +762,12 @@ def db_hotel_link():
     conn.close()
 
     return link_list
-###################################################################################
-
-def readingdbkey():
-    path=os.path.dirname(os.path.abspath(__file__))
-    print(path)
-    dbkey=os.path.join(path,'dbkey.txt')
-    with open(dbkey, 'r') as f:
-        s = f.read()
-        key=eval(s)
-        return key
    
 ####################################################################################
 
 def resume(opt,var=''):
     path=os.path.dirname(os.path.abspath(__file__))
-    backup=os.path.join(path,'backup.txt')
+    backup=os.path.join(path,'backupLink.txt')
     if opt == 'w':
         text_file = open(backup, "w")
         text_file.write(str(var))
@@ -765,43 +781,49 @@ def resume(opt,var=''):
 ####################################################################################
 start=time.time()
 
-#research_options
-day_in_str='2017-12-20'
 
-delta_day_out=7
-delta_days=7
-date_iter=4
+#research_options from text file
+with open('search_opt.txt', 'r') as f:
+         s = f.read().strip('\n')
+         print(s)
+         opt=eval(s)
+
+print(opt)    
+day_in_str=opt['day_in_str']
+delta_day_out=opt['delta_day_out']
+delta_days=opt['delta_days']
+date_iter=opt['date_iter']
 
 print(__doc__)
 
 global n_link
 n_link=0
 
-import conn_db
-#try:   
-key=readingdbkey()
-db_name=key['db_name']
-user_name=key['user_name']
-#except:
-    #key=db_key_mod()
+from conn_db import readingdbkey,db_key_mod
+try:   
+    key=readingdbkey()
+    db_name=key['db_name']
+    user_name=key['user_name']
+except:
+    key=db_key_mod()
 
 day_in_def=day_in_str
 try:
     var = resume('r')
-    n_link=int(var[0])
-    day_in_str=str(var[1])
+    n_link=int(var[1])
+    day_in_str=str(var[2])
+    date_iter=date_iter-int(var[0])
     print('\nLast section was stopped at link ', n_link+1, 'for day_in: ',day_in_str)
     import sys, select
     print('\nPress "ent" to restart from there, or a default start will be done\n') # wait time -->deafult Nlink start
     i, o, e = select.select( [sys.stdin], [], [], 10 )
     if (i):
-        print ('Restating from', n_link+1)
+        print ('Restarting from', n_link+1, ' with iteration ', date_iter )
     else:
         print ('Default start')
-        os.remove('backup.txt')
+        os.remove('backupLink.txt')
         n_link=0
         day_in_str=day_in_def
-        
 except:
     pass
 
@@ -818,24 +840,26 @@ link_list=db_hotel_link()
 for i in range (0,date_iter):
     n_iter=0 
     max_it=10 #fix the max number of request attempt
-    if  args.scraping_type == 1 or args.scraping_type == 2 or args.scraping_type == 3 or args.scraping_type == 4:
+    if  args.scraping_type == 1 or args.scraping_type == 3 or args.scraping_type == 2 or args.scraping_type == 4 :
         print('type of scraping: ',args.scraping_type)
-        result=crawler(link_list,day_in,day_out)
+        result=crawler(link_list,day_in,day_out,i)
         if result == 'connection error':
             print('connection error at ',n_link)
         else:
             while result == 0 and n_iter<max_it: 
-                resutl=crawler(link_list,day_in,day_out)
+                resutl=crawler(link_list,day_in,day_out,i)
                 n_iter+=1
                 print('Error during scraping: look at "Error_msg.txt"')
-            os.remove('backup.txt')
+            os.remove('backupLink.txt')
             print("global scraping and udating done in %0.3fs" % (time.time() - start))
-
+            if args.scraping_type == 1 or args.scraping_type == 3 or args.scraping_type == 4:
+                break
+   
     else:
         print("chose type of scraping, -h for help")
 
     day_in=day_in+datetime.timedelta(days=delta_days)
     day_out=day_out+datetime.timedelta(days=delta_days)
-       
+   
 
 
