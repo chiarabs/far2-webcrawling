@@ -334,11 +334,11 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
 
     try:
         price=tr1.select_one('strong.js-track-hp-rt-room-price').text.strip('\t\r\n\€xa')
-        price=(float(re.sub('[^0-9,]', "", price).replace(",", ".")))
+        price=(float(re.sub('[^0-9,.]', "", price).replace(",", ".")))
     except:
         try:
             price=tr1.find('span', class_='hprt-price-price-standard').text.strip('\t\r\n\€xa')
-            price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
+            price=float(re.sub('[^0-9,.]', "", price).replace(",", "."))
         except :
             price=None
     try:
@@ -455,55 +455,56 @@ def hotel_ratings_update(day_in,day_out,link,hotel_soup):
 
     try:
         breakfast_score=score_spec.find('li',{'data-question':'breakfast'}).find('p', class_='review_score_value').text
-        breakfast_score=float(re.sub('[^0-9,]', "", breakfast_score).replace(",", "."))
+        breakfast_score=float(re.sub('[^0-9,.]', "", breakfast_score).replace(",", "."))
     except:
         breakfast_score=None
 
     try:
         clean_score=score_spec.find('li',{'data-question':'hotel_clean'}).find('p', class_='review_score_value').text
-        clean_score=float(re.sub('[^0-9,]', "", clean_score).replace(",", "."))
+        clean_score=float(re.sub('[^0-9,.]', "", clean_score).replace(",", "."))
     except:
         clean_score=None
 
     try:
         comfort_score=score_spec.find('li',{'data-question':'hotel_comfort'}).find('p', class_='review_score_value').text
-        comfort_score=float(re.sub('[^0-9,]', "", comfort_score).replace(",", "."))
+        comfort_score=float(re.sub('[^0-9,.]', "", comfort_score).replace(",", "."))
     except:
         comfort_score=None
 
     try:
         location_score=score_spec.find('li',{'data-question':'hotel_location'}).find('p', class_='review_score_value').text
-        location_score=float(re.sub('[^0-9,]', "", location_score).replace(",", "."))
+        location_score=float(re.sub('[^0-9,.]', "", location_score).replace(",", "."))
     except:
         location_score=None
 
     try:
         services_score=score_spec.find('li',{'data-question':'hotel_services'}).find('p', class_='review_score_value').text
-        services_score=float(re.sub('[^0-9,]', "", services_score).replace(",", "."))
+        services_score=float(re.sub('[^0-9,.]', "", services_score).replace(",", "."))
     except:
         services_score=None
 
     try:
         staff_score=score_spec.find('li',{'data-question':'hotel_staff'}).find('p', class_='review_score_value').text
-        staff_score=float(re.sub('[^0-9,]', "", staff_score).replace(",", "."))
+        staff_score=float(re.sub('[^0-9,.]', "", staff_score).replace(",", "."))
     except:
         staff_score=None
 
     try:
         value_score=score_spec.find('li',{'data-question':'hotel_value'}).find('p', class_='review_score_value').text
-        value_score=float(re.sub('[^0-9,]', "", value_score).replace(",", "."))
+        value_score=float(re.sub('[^0-9,.]', "", value_score).replace(",", "."))
     except:
         value_score=None
+    print(value_score)
 
     try:
         wifi_score=score_spec.find('li',{'data-question':'hotel_wifi'}).find('p', class_='review_score_value').text
-        wifi_score=float(re.sub('[^0-9,]', "", wifi_score).replace(",", "."))
+        wifi_score=float(re.sub('[^0-9,.]', "", wifi_score).replace(",", "."))
     except:
         wifi_score=None
 
     try:
         n_ratings=hotel_soup.select_one('span.review-score-widget__subtext').text
-        n_ratings=int(re.sub('[^0-9,]', "", n_ratings))
+        n_ratings=int(re.sub('[^0-9,.]', "", n_ratings))
     except:
         n_ratings=None
     #print(wifi_score,staff_score,services_score,n_ratings)
@@ -779,23 +780,47 @@ def resume(opt,var=''):
             return var
     
 ####################################################################################
+path=os.path.dirname(os.path.abspath(__file__))
 start=time.time()
 
 
 #research_options from text file
 with open('search_opt.txt', 'r') as f:
          s = f.read().strip('\n')
-         print(s)
          opt=eval(s)
 
-print(opt)    
+   
 day_in_str=opt['day_in_str']
 delta_day_out=opt['delta_day_out']
 delta_days=opt['delta_days']
 date_iter=opt['date_iter']
 
+#check current day and correct date loop
+today=datetime.datetime.now()
+day_in = datetime.datetime.strptime(day_in_str,'%Y-%m-%d')
+if today>day_in+datetime.timedelta(days=1):
+    day_in=day_in+datetime.timedelta(days=delta_days)
+    day_in_str=str(day_in.date())
+    print(day_in)
+    date_iter-=1
+    #print(date_iter)
+    new_opt= {
+        'day_in_str':day_in_str,+
+        'delta_day_out':7,
+        'delta_days':7,
+        'date_iter':date_iter,
+        'type_of_location':"city" ,    #set = 'city' or 'region'
+        'location':"Aosta"
+    }
+    text_file = open(os.path.join(path,"search_opt.txt"), "w")
+    text_file.write(str(new_opt))
+    text_file.close()
+   
+
+
 print(__doc__)
 
+print('\nsearch options: ',opt) 
 global n_link
 n_link=0
 
@@ -828,7 +853,7 @@ except:
     pass
 
 # loop on date search
-day_in = datetime.datetime.strptime(day_in_str,'%Y-%m-%d')
+#day_in = datetime.datetime.strptime(day_in_str,'%Y-%m-%d')
 day_out = datetime.datetime.strptime(day_in_str, '%Y-%m-%d')+datetime.timedelta(days=delta_day_out)
 day_in=day_in.date()
 day_out=day_out.date()
