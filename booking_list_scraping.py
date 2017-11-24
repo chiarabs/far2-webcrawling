@@ -56,6 +56,7 @@ def crawler(link_list,day_in,day_out,date_iter):
     #setting random user agent
     try:
         ua = UserAgent()
+        ua = UserAgent(use_cache_server=False)
     except FakeUserAgentError:
         print("\nConnection error, please verify your connection")
         return 'connection error'
@@ -68,8 +69,6 @@ def crawler(link_list,day_in,day_out,date_iter):
     #loop  over all the link contained in link_list
     for idx_link , link in enumerate(link_list[n_link:]): 
         resume('w',[date_iter,idx_link+n_link,day_in])
-        print(link[0])
-        print('link: ',idx_link+n_link+1, 'for date: ', day_in, ' - ',day_out )
 
         hotel_link=base_url+link[0]+'?;checkin='+str(day_in)+';checkout='+str(day_out)
         print (hotel_link)
@@ -93,6 +92,7 @@ def crawler(link_list,day_in,day_out,date_iter):
         soup = bs(response,'lxml')
 
         if args.scraping_type < 2:
+            print('link: ',idx_link+n_link+1)
             hotel_table_check=hotel_table_update(hotel_link,link[0],None,soup)
             if hotel_table_check==0:
                 text_file = open(os.path.join(path,"Error_msg.txt"), "a")
@@ -102,7 +102,8 @@ def crawler(link_list,day_in,day_out,date_iter):
             else:
                 continue
 
-        if args.scraping_type == 2:   
+        if args.scraping_type == 2: 
+            print('link: ',idx_link+n_link+1, 'for date: ', day_in, ' - ',day_out )
             hotel_data_check=hotel_data_update(day_in,day_out,link[0],soup)
             if hotel_data_check==0:
                 text_file = open(os.path.join(path,"Error_msg.txt"), "a")
@@ -112,7 +113,8 @@ def crawler(link_list,day_in,day_out,date_iter):
             else:
                 continue
 
-        elif args.scraping_type == 3:   
+        elif args.scraping_type == 3:
+            print('link: ',idx_link+n_link+1)
             hotel_ratings_check=hotel_ratings_update(day_in,day_out,link[0],soup)
             if hotel_ratings_check==0:
                 text_file = open(os.path.join(path,"Error_msg.txt"), "a")
@@ -123,6 +125,7 @@ def crawler(link_list,day_in,day_out,date_iter):
                 continue
 
         elif args.scraping_type == 4:
+            print('link: ',idx_link+n_link+1)
             hotel_reviews_check=hotel_reviews_update(headers,link[0],soup)
             if hotel_reviews_check==0:
                 text_file = open(os.path.join(path,"Error_msg.txt"), "a")
@@ -785,7 +788,7 @@ start=time.time()
 
 
 #research_options from text file
-with open('search_opt.txt', 'r') as f:
+with open(os.path.join(path,"search_opt.txt"), "r") as f:
          s = f.read().strip('\n')
          opt=eval(s)
 
@@ -846,7 +849,7 @@ try:
         print ('Restarting from', n_link+1, ' with iteration ', date_iter )
     else:
         print ('Default start')
-        os.remove('backupLink.txt')
+        os.remove(os.path.join(path,'backupLink.txt'))
         n_link=0
         day_in_str=day_in_def
 except:
@@ -875,7 +878,7 @@ for i in range (0,date_iter):
                 resutl=crawler(link_list,day_in,day_out,i)
                 n_iter+=1
                 print('Error during scraping: look at "Error_msg.txt"')
-            os.remove('backupLink.txt')
+            os.remove(os.path.join(path,'backupLink.txt'))
             print("global scraping and udating done in %0.3fs" % (time.time() - start))
             if args.scraping_type == 1 or args.scraping_type == 3 or args.scraping_type == 4:
                 break
