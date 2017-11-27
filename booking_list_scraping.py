@@ -56,15 +56,15 @@ def crawler(link_list,day_in,day_out,date_iter):
     #setting random user agent
     try:
         ua = UserAgent()
-        ua = UserAgent(use_cache_server=False)
     except FakeUserAgentError:
         print("\nConnection error, please verify your connection")
         return 'connection error'
         
     try:
-        headers={'User-Agent': ua.random}
+        headers={'User-agent': ua.random}
+        #headers={'User-Agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.90 Safari/537.36'}
     except:
-        headers={'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:56.0) Gecko/20100101 Firefox/56.0'}
+        headers={'User-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:56.0) Gecko/20100101 Firefox/56.0'}
     print (headers)
     #loop  over all the link contained in link_list
     for idx_link , link in enumerate(link_list[n_link:]): 
@@ -221,8 +221,8 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
         return 
 
     room_list=[]
-    if hotel_soup.find(id='room_availability_container'):
-        room_availability_container= hotel_soup.find(id='room_availability_container')
+    if hotel_soup.select_one('#hp_availability_style_changes'): #hotel_soup.find(id='room_availability_container'):
+        room_availability_container=hotel_soup.select_one('#hp_availability_style_changes') #hotel_soup.find(id='room_availability_container')
 
         #loop on rooms to get each one characteristics
         for tr in room_availability_container.find_all('tr', class_=re.compile("^room_loop.*maintr $")):
@@ -244,10 +244,11 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
                 room_alldata=room_get_all_data(hotel_id,day_in,day_out,room_data,tr1)
                 room_list.append(room_alldata)
                     
-    else:
+    elif hotel_soup.select_one('p.simple_av_calendar_no_av sold_out_msg'):
         print('no available rooms')
         room_list=[room_get_all_data(hotel_id,day_in,day_out,'no room','no av room')]
-    
+    else:
+        print('\nerror getting hotel data')
     print('single scraping done in %0.3fs' % (time.time() - t0))
     try:    
         db_hotel_data_update(room_list)
