@@ -221,7 +221,12 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
         return 
 
     room_list=[]
-    if hotel_soup.select_one('#hp_availability_style_changes'): #hotel_soup.find(id='room_availability_container'):
+
+    if hotel_soup.select_one('#no_availability_msg') is not None:
+        print('no available rooms')
+        room_list=[room_get_all_data(hotel_id,day_in,day_out,'no room','no av room')]
+
+    elif hotel_soup.select_one('#hp_availability_style_changes'): #hotel_soup.find(id='room_availability_container'):
         room_availability_container=hotel_soup.select_one('#hp_availability_style_changes') #hotel_soup.find(id='room_availability_container')
 
         #loop on rooms to get each one characteristics
@@ -243,10 +248,7 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
             for tr1 in room_availability_container.find_all('tr',{'id':re.compile("^%s"%room_data.room_id)}):
                 room_alldata=room_get_all_data(hotel_id,day_in,day_out,room_data,tr1)
                 room_list.append(room_alldata)
-                    
-    elif hotel_soup.select_one('p.simple_av_calendar_no_av sold_out_msg'):
-        print('no available rooms')
-        room_list=[room_get_all_data(hotel_id,day_in,day_out,'no room','no av room')]
+
     else:
         print('\nerror getting hotel data')
     print('single scraping done in %0.3fs' % (time.time() - t0))
@@ -338,11 +340,11 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
 
     try:
         price=tr1.select_one('strong.js-track-hp-rt-room-price').text.strip('\t\r\n\€xa')
-        price=(float(re.sub('[^0-9,.]', "", price).replace(",", ".")))
+        price=(float(re.sub('[^0-9,]', "", price).replace(",", ".")))
     except:
         try:
             price=tr1.find('span', class_='hprt-price-price-standard').text.strip('\t\r\n\€xa')
-            price=float(re.sub('[^0-9,.]', "", price).replace(",", "."))
+            price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
         except :
             price=None
     try:
