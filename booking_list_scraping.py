@@ -38,8 +38,6 @@ args = parser.parse_args()
 base_url='http://www.booking.com'
 
 def crawler(link_list,day_in,day_out,date_iter): 
-    
-    global n_link
 
     path=os.path.dirname(os.path.abspath(__file__))
 
@@ -67,74 +65,57 @@ def crawler(link_list,day_in,day_out,date_iter):
         headers={'User-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:56.0) Gecko/20100101 Firefox/56.0'}
     print (headers)
     #loop  over all the link contained in link_list
-    for idx_link , link in enumerate(link_list[n_link:]): 
-        resume('w',[date_iter,idx_link+n_link,day_in])
-
-        hotel_link=base_url+link[0]+'?;checkin='+str(day_in)+';checkout='+str(day_out)
-        print (hotel_link)
+  
+    n_iter=1
+    max_it=10
+    while n_iter<max_it:
+        try:
+            response = requests.get(hotel_link, headers=headers).text
+            break
+        except requests.exceptions.RequestException as e:  
+            print (e,' attempt n. ',max_it)
+            text_file = open(os.path.join(path,"ConnectionError_msg.txt"), "a")
+            text_file.write('\nConnection error: %s'%e)
+            text_file.close()
+            n_iter+=1
+            time.sleep(10)
+    if n_iter==10:
+        return 'connection error'
         
-        n_iter=1
-        max_it=10
-        while n_iter<max_it:
-            try:
-                response = requests.get(hotel_link, headers=headers).text
-                break
-            except requests.exceptions.RequestException as e:  
-                print (e,' attempt n. ',max_it)
-                text_file = open(os.path.join(path,"ConnectionError_msg.txt"), "a")
-                text_file.write('\nConnection error: %s'%e)
-                text_file.close()
-                n_iter+=1
-                time.sleep(10)
-        if n_iter==10:
-            return 'connection error'
+    soup = bs(response,'lxml')
 
-        soup = bs(response,'lxml')
+    if args.scraping_type < 2:
+        hotel_table_check=hotel_table_update(hotel_link,link[0],None,soup)
+        if hotel_table_check==0:
+            text_file = open(os.path.join(path,"Error_msg.txt"), "a")
+            text_file.write('Hotel_table_update: error getting data for %s'%hotel_link)
+            text_file.close()
+            return 0
 
-        if args.scraping_type < 2:
-            print('link: ',idx_link+n_link+1)
-            hotel_table_check=hotel_table_update(hotel_link,link[0],None,soup)
-            if hotel_table_check==0:
-                text_file = open(os.path.join(path,"Error_msg.txt"), "a")
-                text_file.write('Hotel_table_update: error getting data for %s'%hotel_link)
-                text_file.close()
-                return 0
-            else:
-                continue
+    if args.scraping_type == 2: 
+        hotel_data_check=hotel_data_update(day_in,day_out,link[0],soup)
+        if hotel_data_check==0:
+            text_file = open(os.path.join(path,"Error_msg.txt"), "a")
+            text_file.write('\nHotel_data_update: error getting data for %s '%hotel_link)
+            text_file.close()
+            return 0
 
-        if args.scraping_type == 2: 
-            print('link: ',idx_link+n_link+1, 'for date: ', day_in, ' - ',day_out )
-            hotel_data_check=hotel_data_update(day_in,day_out,link[0],soup)
-            if hotel_data_check==0:
-                text_file = open(os.path.join(path,"Error_msg.txt"), "a")
-                text_file.write('\nHotel_data_update: error getting data for %s '%hotel_link)
-                text_file.close()
-                return 0
-            else:
-                continue
+    elif args.scraping_type == 3:
+        hotel_ratings_check=hotel_ratings_update(day_in,day_out,link[0],soup)
+        if hotel_ratings_check==0:
+            text_file = open(os.path.join(path,"Error_msg.txt"), "a")
+            text_file.write('\nHotel_ratings_update: error getting data for %s'%hotel_link)
+            text_file.close()
+            return 0
 
-        elif args.scraping_type == 3:
-            print('link: ',idx_link+n_link+1)
-            hotel_ratings_check=hotel_ratings_update(day_in,day_out,link[0],soup)
-            if hotel_ratings_check==0:
-                text_file = open(os.path.join(path,"Error_msg.txt"), "a")
-                text_file.write('\nHotel_ratings_update: error getting data for %s'%hotel_link)
-                text_file.close()
-                return 0
-            else:
-                continue
-
-        elif args.scraping_type == 4:
-            print('link: ',idx_link+n_link+1)
-            hotel_reviews_check=hotel_reviews_update(headers,link[0],soup)
-            if hotel_reviews_check==0:
-                text_file = open(os.path.join(path,"Error_msg.txt"), "a")
-                text_file.write('\nHotel_reviews_update: error getting data for %s'%hotel_link)
-                text_file.close()
-                return 0
-            else:
-                continue
-    
+    elif args.scraping_type == 4:
+        hotel_reviews_check=hotel_reviews_update(headers,link[0],soup)
+        if hotel_reviews_check==0:
+            text_file = open(os.path.join(path,"Error_msg.txt"), "a")
+            text_file.write('\nHotel_reviews_update: error getting data for %s'%hotel_link)
+            text_file.close()
+            return 0
+       
     return 1
 
 ##################################################################################################
@@ -226,11 +207,12 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
         print('no available rooms')
         room_list=[room_get_all_data(hotel_id,day_in,day_out,'no room','no av room')]
 
-    elif hotel_soup.select_one('#hp_availability_style_changes'): #hotel_soup.find(id='room_availability_container'):
-        room_availability_container=hotel_soup.select_one('#hp_availability_style_changes') #hotel_soup.find(id='room_availability_container')
-
+    elif hotel_soup.select_one('#room_availability_container') is not None: #hotel_soup.find(id='room_availability_container'):
+        room_availability_container=hotel_soup.select_one('#room_availability_container') #hotel_soup.find(id='room_availability_container')
+        #print(room_availability_container.find("tr", class_=re.compile("^room_loop.*maintr $")))
         #loop on rooms to get each one characteristics
         for tr in room_availability_container.find_all('tr', class_=re.compile("^room_loop.*maintr $")):
+            print(tr)
             room_counter=int(re.sub('[^0-9]', "", str(tr['class'])))
             try: 
                 room_size=hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').select_one('span.info.rooms-block__pills-container__pill').text
@@ -251,6 +233,7 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
 
     else:
         print('\nerror getting hotel data')
+        return 0
     print('single scraping done in %0.3fs' % (time.time() - t0))
     try:    
         db_hotel_data_update(room_list)
@@ -839,6 +822,7 @@ except:
     key=db_key_mod()
 
 day_in_def=day_in_str
+date_iter_def=date_iter
 try:
     var = resume('r')
     n_link=int(var[1])
@@ -855,6 +839,7 @@ try:
         os.remove(os.path.join(path,'backupLink.txt'))
         n_link=0
         day_in_str=day_in_def
+        date_iter=date_iter_def
 except:
     pass
 
@@ -866,28 +851,38 @@ day_out=day_out.date()
 
 
 link_list=db_hotel_link()
+print('type of scraping: ',args.scraping_type)
 
 # loop on date search
 for i in range (0,date_iter):
     n_iter=0 
     max_it=10 #fix the max number of request attempt
-    if  args.scraping_type == 1 or args.scraping_type == 3 or args.scraping_type == 2 or args.scraping_type == 4 :
-        print('type of scraping: ',args.scraping_type)
-        result=crawler(link_list,day_in,day_out,i)
-        if result == 'connection error':
-            print('connection error at ',n_link)
-        else:
-            while result == 0 and n_iter<max_it: 
-                resutl=crawler(link_list,day_in,day_out,i)
-                n_iter+=1
-                print('Error during scraping: look at "Error_msg.txt"')
-            os.remove(os.path.join(path,'backupLink.txt'))
-            print("global scraping and udating done in %0.3fs" % (time.time() - start))
-            if args.scraping_type == 1 or args.scraping_type == 3 or args.scraping_type == 4:
-                break
+
+    for idx_link , link in enumerate(link_list[n_link:]): 
+        resume('w',[date_iter,idx_link+n_link,day_in])
+
+        hotel_link=base_url+link[0]+'?;checkin='+str(day_in)+';checkout='+str(day_out)
+        print (hotel_link)
+        
+        if  args.scraping_type == 1 or args.scraping_type == 3 or args.scraping_type == 2 or args.scraping_type == 4 :
+            print('link: ',idx_link+n_link+1)
+            if args.scraping_type==2:
+                print('\nsearch dates: ', day_in, ' - ',day_out )
+            result=crawler(link_list,day_in,day_out,i)
+            if result == 'connection error':
+                print('connection error at ',n_link)
+            else:
+                while result == 0 and n_iter<max_it: 
+                    resutl=crawler(link_list,day_in,day_out,i)
+                    n_iter+=1
+                    print('Error during scraping: look at "Error_msg.txt"')
+                os.remove(os.path.join(path,'backupLink.txt'))
+                print("global scraping and udating done in %0.3fs" % (time.time() - start))
+                if args.scraping_type == 1 or args.scraping_type == 3 or args.scraping_type == 4:
+                    break
    
-    else:
-        print("chose type of scraping, -h for help")
+        else:
+            print("chose type of scraping, -h for help")
 
     day_in=day_in+datetime.timedelta(days=delta_days)
     day_out=day_out+datetime.timedelta(days=delta_days)
