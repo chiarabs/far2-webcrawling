@@ -231,6 +231,20 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
                 room_alldata=room_get_all_data(hotel_id,day_in,day_out,room_data,tr1)
                 room_list.append(room_alldata)
 
+    elif hotel_soup.select_one('table.hrpt-table') is not None:
+        table= hotel_soup.select_one('table.hrpt-table')
+        for a in table.select('a.hprt-roomtype-link'):
+            room_id=int(re.sub('[^0-9]', "", a['data-room-id']))
+            room_type=a.text.strip('\t\r\n\€xa')
+            room_size=None #add find roomsize
+            print(room_id)
+            tr=a.find_parent('td')
+            room_data=room_get_main_data_hprt(tr,room_id,room_type,room_size)
+            
+            for tr1 in table.find_all('tr',{'data-block-id':re.compile("^%s"%room_id)}]):
+                room_alldata=room_get_all_data(hotel_id,day_in,day_out,room_data,tr1)
+                room_list.append(room_alldata)            
+            
     else:
         print('\nerror getting hotel data')
         return 0
@@ -297,6 +311,47 @@ def room_get_main_data (tr,room_size):
 
 ##############################################################################################
 
+def room_get_main_data_hprt(tr,room_id,room_type,room_size):
+
+     class room_main_data(object):
+        def __init__(self,room_id,room_type,room_size,room_facilities,room_inc1,room_inc0):
+            self.room_id=room_id
+            self.room_type=room_type
+            self.room_size=room_size
+            self.room_facilities=room_facilities
+            self.room_inc1=room_inc1
+            self.room_inc0=room_inc0
+    
+
+    if room_size is None:
+        try:
+            room_size=tr.select_one('i.bicon-roomsize').next_sibling
+            room_size=int(re.sub('[^0-9]', "", room_size))
+        except:
+            print('no room size')
+            room_size=None
+
+    try:
+        facility=tr.select_one('div.hprt-facilities-block').select('span.hprt-facilities-facility')
+        for el in facility:
+            try:
+                room_facilities.append(el.text.strip('.\t\r\n\•'))
+            except:
+                continue
+    except:
+          room_facilities=None
+    
+    room_inc1=None
+    room_inc0=None
+    if tr.select('div.hptr-taxinfo-details'):       
+        for el in tr.select('div.hptr-'):
+            if el.select_one('span.hptr-taxinfo-label').text in ['include','incluso','Include','Incluso']:
+                room_inc1=el.text.('.\t\r\n')
+            elif el.select_one('span.hptr-taxinfo-label').text in ['non include','Non include','non incluso','Non incluso']:
+                room_inc0=el.text.strip('.\t\r\n')
+
+
+#############################################################################################
 def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
     d=room_data
     class room_all_data(object):
@@ -357,6 +412,67 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
     #print(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left)
     return room_all_data(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left,sale)
 
+####################################################################################################
+
+def room_get_all_data_hprt(hotel_id,day_in,day_out,room_data,tr1):
+    d=room_data
+    class room_all_data(object):
+        def __init__(self,hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,room_inc1,room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left,sale):
+            self.hotel_id=hotel_id
+            self.day_in=day_in
+            self.day_out=day_out
+            self.search_date=(datetime.datetime.now().date())
+            self.room_id=room_id
+            self.room_type=room_type
+            self.room_size=room_size
+            self.room_facilities=room_facilities
+            self.room_inc1=room_inc1
+            self.room_inc0=room_inc0   
+            self.price=price
+            self.breakfast_opt=breakfast_opt
+            self.policy_opt=policy_opt
+            self.max_occ=max_occ
+            self.room_left=room_left
+            self.sale=sale
+    
+
+    try:
+        price=tr1.select_one('strong.js-track-hp-rt-room-price').text.strip('\t\r\n\€xa')
+        price=(float(re.sub('[^0-9,]', "", price).replace(",", ".")))
+    except:
+        try:
+            price=tr1.find('span', class_='hprt-price-price-standard').text.strip('\t\r\n\€xa')
+            price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
+        except :
+            price=None
+    try:
+        sale=tr1.select_one('label.save-percentage__label').text.strip('\t\r\n')
+        sale=int(re.sub('[0-9]',"",sale))
+    except:
+        sale=None
+       
+    policy_opt=[]
+    breakfast_opt=[]
+    for el in tr1.select_one('ul.hprt-conditions').select('li'):
+        if el.find('span', class_='bicon-coffee') in el:
+            breakfast_opt.append(el.text.strip('\n'))
+        else:
+            policy_opt.append(el.text.strip('\n'))
+       
+    try :
+        max_occ=tr1.select_one('div.hprt-occupancy-occupancy-info')['data-title']
+        max_occ=int(re.sub('[^0-9]', "", max_occ))
+    except:
+        max_occ=None
+
+    try:
+        room_left=tr1.select_one('span.only_x_left').text
+        room_left=re.sub('[^0-9,]', "", room_left)
+    except:
+        room_left=None
+
+  #print(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left)
+    return room_all_data(hotel_id,day_in,day_out,d.room_id,d.room_type,d.room_size,d.room_facilities,d.room_inc1,d.room_inc0,price,breakfast_opt,policy_opt,max_occ,room_left,sale)
 #######################################################################################################
 
 def hotel_ratings_update(day_in,day_out,link,hotel_soup):
