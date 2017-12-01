@@ -30,6 +30,8 @@ import time
 import os
 import locale
 locale.setlocale(locale.LC_ALL, 'it_IT.utf8')
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-t", "--scraping_type", action="count", default=0,help='select the type of scraping: -t for hotel_list update (get hotel names), -tt for hotel_data update (get hotel_id, price, average rating), -ttt for hotel_ratings update, -tttt fot hotel_reviews update (get users comments) ')
@@ -37,7 +39,13 @@ args = parser.parse_args()
     
 base_url='http://www.booking.com'
 
-def crawler(link_list,day_in,day_out,date_iter): 
+def init_driver():
+    driver = webdriver.Firefox()
+    driver.wait = WebDriverWait(driver, 1)
+    return driver
+
+def crawler(driver,link_list,day_in,day_out,date_iter): 
+    
 
     path=os.path.dirname(os.path.abspath(__file__))
 
@@ -51,37 +59,44 @@ def crawler(link_list,day_in,day_out,date_iter):
     except:
         pass
 
-    #setting random user agent
-    try:
-        ua = UserAgent()
-    except FakeUserAgentError:
-        print("\nConnection error, please verify your connection")
-        return 'connection error'
-        
-    try:
-        headers={'User-agent': ua.random}
-        #headers={'User-Agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.90 Safari/537.36'}
-    except:
-        headers={'User-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:56.0) Gecko/20100101 Firefox/56.0'}
-    print (headers)
-    #loop  over all the link contained in link_list
-  
-    n_iter=1
-    max_it=10
-    while n_iter<max_it:
+    if driver == 'requests':
+        #setting random user agent
         try:
-            response = requests.get(hotel_link,headers=headers).text
-            break
-        except requests.exceptions.RequestException as e:  
-            print (e,' attempt n. ',max_it)
-            text_file = open(os.path.join(path,"ConnectionError_msg.txt"), "a")
-            text_file.write('\nConnection error: %s'%e)
-            text_file.close()
-            n_iter+=1
-            time.sleep(10)
-    if n_iter==10:
-        return 'connection error'
-        
+            ua = UserAgent()
+        except FakeUserAgentError:
+            print("\nConnection error, please verify your connection")
+            return 'connection error'
+
+        try:
+            headers={'User-agent': ua.random}
+            #headers={'User-Agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.90 Safari/537.36'}
+        except:
+            headers={'User-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:56.0) Gecko/20100101 Firefox/56.0'}
+        print (headers)
+        #loop  over all the link contained in link_list
+
+        n_iter=1
+        max_it=10
+        while n_iter<max_it:
+            try:
+                response = requests.get(hotel_link,headers=headers).text
+                break
+            except requests.exceptions.RequestException as e:  
+                print (e,' attempt n. ',max_it)
+                text_file = open(os.path.join(path,"ConnectionError_msg.txt"), "a")
+                text_file.write('\nConnection error: %s'%e)
+                text_file.close()
+                n_iter+=1
+                time.sleep(10)
+        if n_iter==10:
+            return 'connection error'
+    
+    if driver=='selenium':
+        os.environ['MOZ_HEADLESS'] = '1'
+        driver = init_driver()
+        driver.get(hotel_link)
+        response=driver.page_source
+
     soup = bs(response,'lxml')
 
     if args.scraping_type < 2:
@@ -212,7 +227,7 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
         #print(room_availability_container.find("tr", class_=re.compile("^room_loop.*maintr $")))
         #loop on rooms to get each one characteristics
         for tr in room_availability_container.find_all('tr', class_=re.compile("^room_loop.*maintr $")):
-            print(tr)
+            #print(tr)
             room_counter=int(re.sub('[^0-9]', "", str(tr['class'])))
             try: 
                 room_size=hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').select_one('span.info.rooms-block__pills-container__pill').text
@@ -985,12 +1000,12 @@ for i in range (0,date_iter):
             print('link: ',idx_link+n_link+1)
             if args.scraping_type==2:
                 print('\nsearch dates: ', day_in, ' - ',day_out )
-            result=crawler(link_list,day_in,day_out,i)
+            result=crawler('selenium',link_list,day_in,day_out,i) #set selenium or requests
             if result == 'connection error':
                 print('connection error at ',n_link)
             else:
                 while result == 0 and n_iter<max_it: 
-                    resutl=crawler(link_list,day_in,day_out,i)
+                    resutl=crawler('selenium',link_list,day_in,day_out,i)
                     n_iter+=1
                     print('Error during scraping: look at "Error_msg.txt"')
                 os.remove(os.path.join(path,'backupLink.txt'))
