@@ -70,7 +70,7 @@ def crawler(link_list,day_in,day_out,date_iter):
     max_it=10
     while n_iter<max_it:
         try:
-            response = requests.get(hotel_link, headers=headers).text
+            response = requests.get(hotel_link,headers=headers).text
             break
         except requests.exceptions.RequestException as e:  
             print (e,' attempt n. ',max_it)
@@ -241,7 +241,7 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
             tr=a.find_parent('td')
             room_data=room_get_main_data_hprt(tr,room_id,room_type,room_size)
             
-            for tr1 in table.find_all('tr',{'data-block-id':re.compile("^%s"%room_id)}]):
+            for tr1 in table.find_all('tr',{'data-block-id':re.compile("^%s"%room_id)}):
                 room_alldata=room_get_all_data(hotel_id,day_in,day_out,room_data,tr1)
                 room_list.append(room_alldata)            
             
@@ -313,7 +313,7 @@ def room_get_main_data (tr,room_size):
 
 def room_get_main_data_hprt(tr,room_id,room_type,room_size):
 
-     class room_main_data(object):
+    class room_main_data(object):
         def __init__(self,room_id,room_type,room_size,room_facilities,room_inc1,room_inc0):
             self.room_id=room_id
             self.room_type=room_type
@@ -346,7 +346,7 @@ def room_get_main_data_hprt(tr,room_id,room_type,room_size):
     if tr.select('div.hptr-taxinfo-details'):       
         for el in tr.select('div.hptr-'):
             if el.select_one('span.hptr-taxinfo-label').text in ['include','incluso','Include','Incluso']:
-                room_inc1=el.text.('.\t\r\n')
+                room_inc1=el.text.strip('.\t\r\n')
             elif el.select_one('span.hptr-taxinfo-label').text in ['non include','Non include','non incluso','Non incluso']:
                 room_inc0=el.text.strip('.\t\r\n')
 
@@ -910,7 +910,7 @@ if today>day_in+datetime.timedelta(days=1):
     date_iter-=1
     #print(date_iter)
     new_opt= {
-        'day_in_str':day_in_str,+
+        'day_in_str':day_in_str,
         'delta_day_out':7,
         'delta_days':7,
         'date_iter':date_iter,
@@ -971,12 +971,13 @@ print('type of scraping: ',args.scraping_type)
 
 # loop on date search
 for i in range (0,date_iter):
-    n_iter=0 
-    max_it=10 #fix the max number of request attempt
 
     for idx_link , link in enumerate(link_list[n_link:]): 
         resume('w',[date_iter,idx_link+n_link,day_in])
 
+        n_iter=0 
+        max_it=10 #fix the max number of request attempt
+  
         hotel_link=base_url+link[0]+'?;checkin='+str(day_in)+';checkout='+str(day_out)
         print (hotel_link)
         
