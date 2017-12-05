@@ -68,8 +68,9 @@ def crawler(driver,link_list,day_in,day_out,date_iter):
             return 'connection error'
 
         try:
-            headers={'User-agent': ua.random}
-            #headers={'User-Agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.90 Safari/537.36'}
+            #headers={'User-agent': ua.random}
+            
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.90 Safari/537.36'}
         except:
             headers={'User-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:56.0) Gecko/20100101 Firefox/56.0'}
         print (headers)
@@ -82,7 +83,7 @@ def crawler(driver,link_list,day_in,day_out,date_iter):
                 response = requests.get(hotel_link,headers=headers).text
                 break
             except requests.exceptions.RequestException as e:  
-                print (e,' attempt n. ',max_it)
+                print (e,' attempt n. ', n_iter)
                 text_file = open(os.path.join(path,"ConnectionError_msg.txt"), "a")
                 text_file.write('\nConnection error: %s'%e)
                 text_file.close()
@@ -211,24 +212,31 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
         hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
     except: 
         print('error: no hotel_id')
-        text_file = open("Error_msg.txt", "a")
-        text_file.write('\nNo id found for %s'%link)
-        text_file.close()
+        #text_file = open("Error_msg.txt", "a")
+        #text_file.write('\nNo id found for %s'%link)
+        #text_file.close()
         return 
 
     room_list=[]
+
+    #text_file = open('soup.txt','w')
+    #text_file.write(str(hotel_soup.prettify()))
+    #text_file.close()
 
     if hotel_soup.select_one('#no_availability_msg') is not None:
         print('no available rooms')
         room_list=[room_get_all_data(hotel_id,day_in,day_out,'no room','no av room')]
 
     elif hotel_soup.select_one('#room_availability_container') is not None: #hotel_soup.find(id='room_availability_container'):
-        room_availability_container=hotel_soup.select_one('#room_availability_container') #hotel_soup.find(id='room_availability_container')
-        #print(room_availability_container.find("tr", class_=re.compile("^room_loop.*maintr $")))
+        print('\navailab')
+        room_availability_container=hotel_soup.select_one('#room_availability_container')
+       
         #loop on rooms to get each one characteristics
-        for tr in room_availability_container.find_all('tr', class_=re.compile("^room_loop.*maintr $")):
-            #print(tr)
-            room_counter=int(re.sub('[^0-9]', "", str(tr['class'])))
+        for tr in room_availability_container.select('tr.maintr'):
+            try:
+                room_counter=int(re.sub('[^0-9]', "", str(tr['class'])))
+            except:
+                continue
             try: 
                 room_size=hotel_soup.select_one('tr.room_loop_counter'+str(room_counter)+'.extendedRow').select_one('span.info.rooms-block__pills-container__pill').text
                 room_size=int(re.sub('[^0-9]', "", room_size))
@@ -241,24 +249,33 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
 
             room_data=room_get_main_data(tr,room_size)
 
+
             #loop on room offers
             for tr1 in room_availability_container.find_all('tr',{'id':re.compile("^%s"%room_data.room_id)}):
                 room_alldata=room_get_all_data(hotel_id,day_in,day_out,room_data,tr1)
                 room_list.append(room_alldata)
+                #print(room_alldata.price)
 
-    elif hotel_soup.select_one('table.hrpt-table') is not None:
-        table= hotel_soup.select_one('table.hrpt-table')
+    elif hotel_soup.select_one('table.hprt-table') is not None:
+        print('\nhprt')
+        table= hotel_soup.select_one('table.hprt-table')
         for a in table.select('a.hprt-roomtype-link'):
             room_id=int(re.sub('[^0-9]', "", a['data-room-id']))
             room_type=a.text.strip('\t\r\n\€xa')
-            room_size=None #add find roomsize
-            print(room_id)
             tr=a.find_parent('td')
+            try:
+                room_size=hotel_soup.find('div',{'class':'hprt-lightbox ','data-room-id':re.compile("%s"%room_id)}).select_one('div.hprt-lightbox-right-container').strong.next_sibling
+                room_size=int(re.sub('[^0-9]', "", room_size))
+            except:
+                room_size=None
             room_data=room_get_main_data_hprt(tr,room_id,room_type,room_size)
             
             for tr1 in table.find_all('tr',{'data-block-id':re.compile("^%s"%room_id)}):
-                room_alldata=room_get_all_data(hotel_id,day_in,day_out,room_data,tr1)
-                room_list.append(room_alldata)            
+                if tr1['data-block-id'] is None:
+                    continue
+                room_alldata=room_get_all_data_hprt(hotel_id,day_in,day_out,room_data,tr1)
+                room_list.append(room_alldata)
+                #print(room_alldata.price)       
             
     else:
         print('\nerror getting hotel data')
@@ -290,6 +307,7 @@ def room_get_main_data (tr,room_size):
     room_facilities=[]
     if tr.select_one('a.jqrt'):
         room_type=tr.select_one('a.jqrt')['data-room-name-en']
+
     else:
         room_type=None
 
@@ -297,12 +315,12 @@ def room_get_main_data (tr,room_size):
         facility=tr.select_one('div.rt-all-facilities-hidden').select('span')
         for el in facility:
             try:
-                room_facilities.append(el['data-name-en'])
+                #room_facilities.append(el['data-name-en'])
+                room_facilities.append(el.text.strip('.\t\r\n\•'))
             except KeyError:
                 continue
     except:
         room_facilities=None
-    
     
 
     room_inc1=None
@@ -337,7 +355,7 @@ def room_get_main_data_hprt(tr,room_id,room_type,room_size):
             self.room_inc1=room_inc1
             self.room_inc0=room_inc0
     
-
+    
     if room_size is None:
         try:
             room_size=tr.select_one('i.bicon-roomsize').next_sibling
@@ -345,7 +363,8 @@ def room_get_main_data_hprt(tr,room_id,room_type,room_size):
         except:
             print('no room size')
             room_size=None
-
+            
+    room_facilities=[]
     try:
         facility=tr.select_one('div.hprt-facilities-block').select('span.hprt-facilities-facility')
         for el in facility:
@@ -365,7 +384,7 @@ def room_get_main_data_hprt(tr,room_id,room_type,room_size):
             elif el.select_one('span.hptr-taxinfo-label').text in ['non include','Non include','non incluso','Non incluso']:
                 room_inc0=el.text.strip('.\t\r\n')
 
-
+    return room_main_data(room_id,room_type,room_size,room_facilities,room_inc1,room_inc0)
 #############################################################################################
 def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
     d=room_data
@@ -400,6 +419,7 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
             price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
         except :
             price=None
+  
     try:
         sale=tr1.select_one('label.save-percentage__label').text.strip('\t\r\n')
         sale=int(re.sub('[0-9]',"",sale))
@@ -449,8 +469,7 @@ def room_get_all_data_hprt(hotel_id,day_in,day_out,room_data,tr1):
             self.max_occ=max_occ
             self.room_left=room_left
             self.sale=sale
-    
-
+  
     try:
         price=tr1.select_one('strong.js-track-hp-rt-room-price').text.strip('\t\r\n\€xa')
         price=(float(re.sub('[^0-9,]', "", price).replace(",", ".")))
@@ -458,8 +477,12 @@ def room_get_all_data_hprt(hotel_id,day_in,day_out,room_data,tr1):
         try:
             price=tr1.find('span', class_='hprt-price-price-standard').text.strip('\t\r\n\€xa')
             price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
-        except :
-            price=None
+        except:
+            try:
+                price=tr1.find('span', {'id':re.compile('^b_tt_holder')}).text.strip('\t\r\n\€xa')
+                price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
+            except :
+                price=None
     try:
         sale=tr1.select_one('label.save-percentage__label').text.strip('\t\r\n')
         sale=int(re.sub('[0-9]',"",sale))
@@ -975,7 +998,7 @@ except:
     pass
 
 # loop on date search
-#day_in = datetime.datetime.strptime(day_in_str,'%Y-%m-%d')
+day_in = datetime.datetime.strptime(day_in_str,'%Y-%m-%d')
 day_out = datetime.datetime.strptime(day_in_str, '%Y-%m-%d')+datetime.timedelta(days=delta_day_out)
 day_in=day_in.date()
 day_out=day_out.date()
@@ -987,8 +1010,8 @@ print('type of scraping: ',args.scraping_type)
 # loop on date search
 for i in range (0,date_iter):
 
-    for idx_link , link in enumerate(link_list[n_link:]): 
-        resume('w',[date_iter,idx_link+n_link,day_in])
+    for idx_link , link in enumerate(link_list[n_link:]):
+        resume('w',[i,idx_link+n_link,day_in])
 
         n_iter=0 
         max_it=10 #fix the max number of request attempt
@@ -1000,21 +1023,22 @@ for i in range (0,date_iter):
             print('link: ',idx_link+n_link+1)
             if args.scraping_type==2:
                 print('\nsearch dates: ', day_in, ' - ',day_out )
-            result=crawler('selenium',link_list,day_in,day_out,i) #set selenium or requests
+            result=crawler('requests',link_list,day_in,day_out,i) #set selenium or requests
             if result == 'connection error':
                 print('connection error at ',n_link)
             else:
                 while result == 0 and n_iter<max_it: 
-                    resutl=crawler('selenium',link_list,day_in,day_out,i)
+                    resutl=crawler('requests',link_list,day_in,day_out,i)
                     n_iter+=1
                     print('Error during scraping: look at "Error_msg.txt"')
                 os.remove(os.path.join(path,'backupLink.txt'))
                 print("global scraping and udating done in %0.3fs" % (time.time() - start))
                 if args.scraping_type == 1 or args.scraping_type == 3 or args.scraping_type == 4:
                     break
-   
+       
         else:
             print("chose type of scraping, -h for help")
+    n_link=0
 
     day_in=day_in+datetime.timedelta(days=delta_days)
     day_out=day_out+datetime.timedelta(days=delta_days)
