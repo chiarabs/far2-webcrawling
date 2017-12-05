@@ -536,8 +536,11 @@ def hotel_ratings_update(day_in,day_out,link,hotel_soup):
             self.value_score=value_score
             self.staff_score=staff_score
             self.wifi_score=wifi_score
-            
 
+    text_file = open("soup.txt", "w")
+    text_file.write(str(hotel_soup.prettify()))
+    text_file.close()       
+        
     t0 = time.time()
 
     try:
@@ -557,7 +560,10 @@ def hotel_ratings_update(day_in,day_out,link,hotel_soup):
     try:
         score_dist=hotel_soup.select('span.review_list_score_breakdown_col')[0]
     except:
-        score_dist=None
+        try:
+            score_dist=hotel_soup.select_one('div.review_list_block.one_col')
+        except:
+            score_dist=None
 
     try:
         superb_score=score_dist.find('li',{'data-question':'review_adj_superb'}).find('p', class_='review_score_value').text
@@ -589,12 +595,15 @@ def hotel_ratings_update(day_in,day_out,link,hotel_soup):
     except:
         very_poor_score=None
             
-    #print(superb_score, good_score, average_score, poor_score, very_poor_score)
+    print(superb_score, good_score, average_score, poor_score, very_poor_score)
 
     try:
-        score_spec=hotel_soup.select('span.review_list_score_breakdown_col')[1]
+        score_spec=hotel_soup.select('span.review_list_score_breakdown_col')[1] 
     except:
-        score_spec=None
+        try:
+            score_spec=hotel_soup.select_one('#review_list_score_breakdown')
+        except:
+            score_spec=None
 
     try:
         breakfast_score=score_spec.find('li',{'data-question':'breakfast'}).find('p', class_='review_score_value').text
@@ -650,7 +659,7 @@ def hotel_ratings_update(day_in,day_out,link,hotel_soup):
         n_ratings=int(re.sub('[^0-9,.]', "", n_ratings))
     except:
         n_ratings=None
-    #print(wifi_score,staff_score,services_score,n_ratings)
+    print(breakfast_score,clean_score,location_score,wifi_score,staff_score,services_score,n_ratings)
 
     hotel_ratings=hotel_ratings(hotel_id,day_in,day_out,av_rating,n_ratings,superb_score,good_score,average_score,poor_score,very_poor_score,breakfast_score,clean_score,comfort_score,location_score,services_score,staff_score,value_score,wifi_score)
 
@@ -1033,12 +1042,14 @@ for i in range (0,date_iter):
                     print('Error during scraping: look at "Error_msg.txt"')
                 os.remove(os.path.join(path,'backupLink.txt'))
                 print("global scraping and udating done in %0.3fs" % (time.time() - start))
-                if args.scraping_type == 1 or args.scraping_type == 3 or args.scraping_type == 4:
-                    break
        
         else:
             print("chose type of scraping, -h for help")
+
     n_link=0
+
+    if args.scraping_type == 1 or args.scraping_type == 3 or args.scraping_type == 4:
+                    break
 
     day_in=day_in+datetime.timedelta(days=delta_days)
     day_out=day_out+datetime.timedelta(days=delta_days)
