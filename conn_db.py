@@ -7,13 +7,12 @@ import os
 def init_db():
     
     path=os.path.dirname(os.path.abspath(__file__))
-
-    subprocess.check_output(['which psql'], shell=True)
-    psql_check=subprocess.check_output(['echo $?'], shell=True)
-    if psql_check==1:
+    try:
+        subprocess.call(['psql -V'])
+    except:
         resp=input('You need postgress, do you want intall it now? (Y/N)')
         if resp== 'Y':
-            subprocess.check_output['sudo apt-get install postgresql libpq-dev postgresql-client postgresql-client-common']
+            subprocess.call('sudo apt-get install postgresql libpq-dev postgresql-client postgresql-client-common',shell_True)
         elif resp =='N':
             print('Please, make sure to have a postgres version installed otherwise you can not run this script')
         else: 
@@ -24,11 +23,11 @@ def init_db():
     sys_user_name=getpass.getuser()
     #user_name=input('set databse user: ')
     db_name=input('set database name: ')
-    #command='sudo -u postgres -i createuser -d '+user_name
-    command1='sudo -u postgres -i createdb '+db_name#+' -O '+user_name
+    command='sudo -u postgres -i createuser -d '+sys_user_name
+    subprocess.call(command,shell=True)
+    command1='sudo -u postgres -i createdb '+db_name+' -O '+sys_user_name
     #subprocess.check_output([command],shell=True)
-    subprocess.check_output([command1],shell=True)
-    print('%s database correctly created') 
+    subprocess.call([command1],shell=True)
     print(db_name,' ',sys_user_name)
 
     con = ps.connect('dbname='+db_name+' user='+sys_user_name)
@@ -58,13 +57,14 @@ hotel_name VARCHAR(80), location INTEGER, hotel_address VARCHAR(200), hotel_id I
     try:
         pathfile=os.path.join(path,'hotel_link_list.csv')
         sql=  '\copy hotel_list ( hotel_link ) FROM %s WITH CSV HEADER;'
-        data=(pathfile,)
+        #data=(pathfile,)
+        data=('hotel_link_list.csv',)
         cur.excecute(sql,data)
     except:
         pass
 
     sql = '''CREATE TABLE hotel_data (
-hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, room_id INTEGER, room_type VARCHAR(100), room_size NUMERIC(4,0), price NUMERIC(8,2), breakfast_opt VARCHAR(500), policy_opt VARCHAR(500), room_left NUMERIC(2,0), room_facilities VARCHAR(1000), max_occ NUMERIC(2,0), inclusive VARCHAR(300),  non_inclusive VARCHAR (300), sale NUMERIC(2,0)
+hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, room_id INTEGER, room_type VARCHAR(100), room_size NUMERIC(4,0), price NUMERIC(8,2), breakfast_opt VARCHAR(500), policy_opt VARCHAR(500), room_left NUMERIC(2,0), room_facilities VARCHAR(1500), max_occ NUMERIC(2,0), inclusive VARCHAR(300),  non_inclusive VARCHAR (300), sale NUMERIC(2,0)
        ) 
        '''
     cur.execute(sql)
