@@ -71,7 +71,7 @@ hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, room_id INTEGER, 
     print('hotel_data table correctly created')
 
     sql = '''CREATE TABLE hotel_ratings (
-hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, av_rating NUMERIC(4,0),superb_score NUMERIC(4,0), good_score NUMERIC(4,0), average_score NUMERIC(4,0), poor_score NUMERIC(4,0), very_poor_score NUMERIC(4,0), breakfast_score NUMERIC(3,1), clean_score  NUMERIC(3,1), comfort_score  NUMERIC(3,1), location_score  NUMERIC(3,1), services_score  NUMERIC(3,1), staff_score  NUMERIC(3,1), value_score  NUMERIC(3,1), wifi_score  NUMERIC(3,1), n_ratings NUMERIC(6,0)
+hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, av_rating NUMERIC(4,1),superb_score NUMERIC(4,0), good_score NUMERIC(4,0), average_score NUMERIC(4,0), poor_score NUMERIC(4,0), very_poor_score NUMERIC(4,0), breakfast_score NUMERIC(3,1), clean_score  NUMERIC(3,1), comfort_score  NUMERIC(3,1), location_score  NUMERIC(3,1), services_score  NUMERIC(3,1), staff_score  NUMERIC(3,1), value_score  NUMERIC(3,1), wifi_score  NUMERIC(3,1), n_ratings NUMERIC(6,0)
        ) 
        '''
     cur.execute(sql)
