@@ -5,7 +5,7 @@
                Booking.com list hotel scraping
 ======================================================
 
-Starting from a hotel list, hotel names, data, ratings and reviews are collected from booking.com and stored in a postgres database: 4 type of scraping are possible, corresponding to the database tables update
+Starting from a hotel list, hotel names, data, ratings and reviews are collected from Booking.com and stored in a postgres database: 4 type of scraping are possible, corresponding to the database tables update
 
 -t for hotel_list update
 -tt for hotel_data update
@@ -14,7 +14,7 @@ Starting from a hotel list, hotel names, data, ratings and reviews are collected
 
 If connection db is not present yet, conn_db.py will be run and a psql database will be created.
 
-Required packages: BeautifulSoup, request, fake_useragent, psycopg2.  
+Required packages: BeautifulSoup, request, fake-useragent, psycopg2.  
 
 """
 
@@ -30,14 +30,14 @@ import time
 import os
 import locale
 locale.setlocale(locale.LC_ALL, 'it_IT.utf8')
-from selenium import webdriver
-from selenium.webdriver.support.ui import WebDriverWait
+#from selenium import webdriver
+#from selenium.webdriver.support.ui import WebDriverWait
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-t", "--scraping_type", action="count", default=0,help='select the type of scraping: -t for hotel_list update (get hotel names), -tt for hotel_data update (get hotel_id, price, average rating), -ttt for hotel_ratings update, -tttt fot hotel_reviews update (get users comments) ')
 args = parser.parse_args()
     
-base_url='http://www.booking.com'
+base_url=''
 
 def init_driver():
     driver = webdriver.Firefox()
@@ -68,9 +68,10 @@ def crawler(driver,link_list,day_in,day_out,date_iter):
             return 'connection error'
 
         try:
-            #headers={'User-agent': ua.random}
+            headers={'User-agent': ua.random}
+            print('fakeuseragent')
             
-            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.90 Safari/537.36'}
+            #headers={'User-Agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.90 Safari/537.36'}
         except:
             headers={'User-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:56.0) Gecko/20100101 Firefox/56.0'}
         print (headers)
@@ -92,11 +93,11 @@ def crawler(driver,link_list,day_in,day_out,date_iter):
         if n_iter==10:
             return 'connection error'
     
-    if driver=='selenium':
-        os.environ['MOZ_HEADLESS'] = '1'
-        driver = init_driver()
-        driver.get(hotel_link)
-        response=driver.page_source
+    #if driver=='selenium':
+    #    os.environ['MOZ_HEADLESS'] = '1'
+    #    driver = init_driver()
+    #    driver.get(hotel_link)
+    #    response=driver.page_source
 
     soup = bs(response,'lxml')
 
@@ -155,8 +156,12 @@ def hotel_table_update(hotel_link,link,hotel_type,hotel_soup) :
         hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
         print(hotel_id)
     except:
-        print('Error hotel_id')
-        hotel_id=None
+        try:
+            hotel_id=int(hotel_soup.find("input", {"data-model":"hotel_id"})['value'])
+            print(hotel_id)
+        except:   
+            print('No hotel_id found')
+            hotel_id=None
     try:
         dest_id=int(hotel_link[hotel_link.find('dest_id=')+len('dest_id='):hotel_link.rfind(';srfid')])
     except:
@@ -182,19 +187,19 @@ def hotel_table_update(hotel_link,link,hotel_type,hotel_soup) :
         hotel_star=int(re.sub('[^0-9,]', "", hotel_star))
     except:
         hotel_star=None
-    #print(hotel_star)
+    print(hotel_star)
 
     hotel_facilities=[]
     try:
-        facilities_list=hotel_soup.find('div', class_='facilitiesChecklist')
+        facilities_list=hotel_soup.find('div', class_='facilitiesChecklistSection')
         for el in facilities_list.find_all('li'):
             try:
-                hotel_facilities.append(el['data-name-en'])
+                hotel_facilities.append(el.span['data-name-en'])
             except KeyError:
                 continue
     except:
         facilities_list=None
-    
+    print(hotel_facilities)
 
     print("done in %0.3fs" % (time.time() - t0))
     hotel_table=hotel_table(hotel_id,hotel_type,hotel_name,hotel_address,dest_id,hotel_star,hotel_facilities)
@@ -212,9 +217,9 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
         hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
     except: 
         print('error: no hotel_id')
-        #text_file = open("Error_msg.txt", "a")
-        #text_file.write('\nNo id found for %s'%link)
-        #text_file.close()
+        text_file = open("Error_msg.txt", "a")
+        text_file.write('\nNo id found for %s'%link)
+        text_file.close()
         return 
 
     room_list=[]
@@ -259,12 +264,26 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
     elif hotel_soup.select_one('table.hprt-table') is not None:
         print('\nhprt')
         table= hotel_soup.select_one('table.hprt-table')
-        for a in table.select('a.hprt-roomtype-link'):
-            room_id=int(re.sub('[^0-9]', "", a['data-room-id']))
-            room_type=a.text.strip('\t\r\n\€xa')
+        for div in table.select('div.hprt-roomtype-name'):
+            try:
+                a=div.select_one('a.hprt-roomtype-link')
+                room_id=int(re.sub('[^0-9]', "", a['data-room-id']))
+                print(room_id)
+            except:
+                room_id=None
+        
+	   
+            try:
+                room_type=div.select_one('span.hprt-roomtype-icon-link').text.strip('\t\r\n\€xa')
+            except:
+                try:
+                    room_type=div.select_one('a.hp-rt-room-name-wrapper').text.strip('\t\r\n\€xa')
+                except:
+                    room_type=None
+    
             tr=a.find_parent('td')
             try:
-                room_size=hotel_soup.find('div',{'class':'hprt-lightbox ','data-room-id':re.compile("%s"%room_id)}).select_one('div.hprt-lightbox-right-container').strong.next_sibling
+                room_size=hotel_soup.find('div',{'class':'hprt-lightbox','data-room-id':re.compile("%s"%room_id)}).select_one('div.hprt-lightbox-right-container').strong.next_sibling
                 room_size=int(re.sub('[^0-9]', "", room_size))
             except:
                 room_size=None
@@ -275,7 +294,7 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
                     continue
                 room_alldata=room_get_all_data_hprt(hotel_id,day_in,day_out,room_data,tr1)
                 room_list.append(room_alldata)
-                #print(room_alldata.price)       
+                print(room_alldata.price)       
             
     else:
         print('\nerror getting hotel data')
@@ -286,7 +305,7 @@ def hotel_data_update (day_in,day_out,link,hotel_soup):
         print('single scraping and updating done in %0.3fs' % (time.time() - t0))
         return 1
     except:
-        raise 
+        print('error updating db hotel_data')
         return 0
     
 ##################################################################################################
@@ -301,9 +320,13 @@ def room_get_main_data (tr,room_size):
             self.room_facilities=room_facilities
             self.room_inc1=room_inc1
             self.room_inc0=room_inc0
-   
+    print(room_size)
     room_id=tr.select_one('div.rt-room-info')['id']
 
+    text=open('typeold','w')
+    text.write(str(tr))
+    text.close
+    
     room_facilities=[]
     if tr.select_one('a.jqrt'):
         room_type=tr.select_one('a.jqrt')['data-room-name-en']
@@ -357,12 +380,21 @@ def room_get_main_data_hprt(tr,room_id,room_type,room_size):
     
     
     if room_size is None:
+        
+        #text=open('sizenew','w')
+        #text.write(str(tr))
+        #text.close
+        
         try:
             room_size=tr.select_one('i.bicon-roomsize').next_sibling
             room_size=int(re.sub('[^0-9]', "", room_size))
         except:
-            print('no room size')
-            room_size=None
+            try:
+                room_size=tr.select_one('div.hprt-facilities-block').select_one('span.hprt-facilities-facility').text
+                room_size=int(re.sub('[^0-9]', "", room_size))
+            except:
+                print('no room size')
+                room_size=None
             
     room_facilities=[]
     try:
@@ -412,19 +444,27 @@ def room_get_all_data(hotel_id,day_in,day_out,room_data,tr1):
 
     try:
         price=tr1.select_one('strong.js-track-hp-rt-room-price').text.strip('\t\r\n\€xa')
-        price=(float(re.sub('[^0-9,]', "", price).replace(",", ".")))
+        price=(float(re.sub('[^0-9.,]', "", price).replace(",", "")))
     except:
         try:
-            price=tr1.find('span', class_='hprt-price-price-standard').text.strip('\t\r\n\€xa')
-            price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
-        except :
-            price=None
+            price=tr1.select_one('span.hprt-price-price-standard').text.strip('\t\r\n\€xa')
+            price=float(re.sub('[^0-9.,]', "", price).replace(",", ""))
+        except:
+            try:
+                price=tr1.select_one('span.hprt-price-price-actual').text.strip('\t\r\n\€xa')
+                price=float(re.sub('[^0-9.,]', "", price).replace(",", ""))
+            except :
+                price=None
   
     try:
         sale=tr1.select_one('label.save-percentage__label').text.strip('\t\r\n')
         sale=int(re.sub('[0-9]',"",sale))
     except:
-        sale=None
+        try: 
+            sale=tr1.select_one('div.hprt-price-rackrate-discount').text.strip('\t\r\n')
+            sale=int(re.sub('[0-9]',"",sale))
+        except:
+            sale=None
        
     policy_opt=[]
     breakfast_opt=[]
@@ -472,30 +512,43 @@ def room_get_all_data_hprt(hotel_id,day_in,day_out,room_data,tr1):
   
     try:
         price=tr1.select_one('strong.js-track-hp-rt-room-price').text.strip('\t\r\n\€xa')
-        price=(float(re.sub('[^0-9,]', "", price).replace(",", ".")))
+        price=(float(re.sub('[^0-9.,]', "", price).replace(",", "")))
     except:
         try:
-            price=tr1.find('span', class_='hprt-price-price-standard').text.strip('\t\r\n\€xa')
-            price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
+            price=tr1.select_one('span.hprt-price-price-standard').text.strip('\t\r\n\€xa')
+            price=float(re.sub('[^0-9.,]', "", price).replace(",", ""))
         except:
             try:
-                price=tr1.find('span', {'id':re.compile('^b_tt_holder')}).text.strip('\t\r\n\€xa')
-                price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
-            except :
+                price=tr1.select_one('span.hprt-price-price-actual').text.strip('\t\r\n\€xa')
+                price=float(re.sub('[^0-9.,]', "", price).replace(",", ""))
+            except:
+                #try:
+                    #price=tr1.find('span', {'id':re.compile('^b_tt_holder')}).text.strip('\t\r\n\€xa')
+                    #price=float(re.sub('[^0-9,]', "", price).replace(",", "."))
+                #except :
                 price=None
+   
     try:
         sale=tr1.select_one('label.save-percentage__label').text.strip('\t\r\n')
         sale=int(re.sub('[0-9]',"",sale))
     except:
-        sale=None
+        try: 
+            sale=tr1.select_one('div.hprt-price-rackrate-discount').text.strip('\t\r\n')
+            sale=int(re.sub('[0-9]',"",sale))
+        except:
+            sale=None
        
     policy_opt=[]
     breakfast_opt=[]
-    for el in tr1.select_one('ul.hprt-conditions').select('li'):
-        if el.find('span', class_='bicon-coffee') in el:
-            breakfast_opt.append(el.text.strip('\n'))
-        else:
-            policy_opt.append(el.text.strip('\n'))
+    try:
+        for el in tr1.select_one('ul.hprt-conditions').select('li'):
+            if el.find('span', class_='bicon-coffee') in el:
+                breakfast_opt.append(el.text.strip('\n'))
+            else:
+                policy_opt.append(el.text.strip('\n'))
+    except:
+        policy_opt.append(None)
+        breakfast_opt.append(None)
        
     try :
         max_occ=tr1.select_one('div.hprt-occupancy-occupancy-info')['data-title']
@@ -537,9 +590,9 @@ def hotel_ratings_update(day_in,day_out,link,hotel_soup):
             self.staff_score=staff_score
             self.wifi_score=wifi_score
 
-    text_file = open("soup.txt", "w")
-    text_file.write(str(hotel_soup.prettify()))
-    text_file.close()       
+    #text_file = open("soup.txt", "w")
+    #text_file.write(str(hotel_soup.prettify()))
+    #text_file.close()       
         
     t0 = time.time()
 
@@ -677,7 +730,7 @@ def hotel_ratings_update(day_in,day_out,link,hotel_soup):
 def hotel_reviews_update (headers,link,hotel_soup) :
     
     class hotel_review(object):
-        def __init__(self,hotel_id,score,lan,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group):
+        def __init__(self,hotel_id,score,lan,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group,stay,clean,location,comfort,value,facilities,staff,wifi):
             self.hotel_id=hotel_id
             self.score=score
             self.lan=lan
@@ -688,9 +741,17 @@ def hotel_reviews_update (headers,link,hotel_soup) :
             self.author_name=author_name
             self.author_nat=author_nat
             self.author_group=author_group
+            self.stay=stay
+            self.clean=clean
+            self.location=location
+            self.comfort=comfort
+            self.value=value
+            self.facilities=facilities
+            self.wifi=wifi
+            self.staff=staff
 
     t0 = time.time()
-
+  
     try:
         hotel_id=int(hotel_soup.find("input", {"name":"hotel_id"})['value'])
     except: 
@@ -700,26 +761,53 @@ def hotel_reviews_update (headers,link,hotel_soup) :
         return
     print(hotel_id)
 
-    try:
-        link_to_rev=hotel_soup.find('a', class_='show_all_reviews_btn')['href']
-        link_to_rev=base_url+link_to_rev
-       
-        language=['fr']#['it','fr','en']
-        for lan in language:
-            print(lan)
-            for i in range (1,3): #set number of review visited pages
-               
-                link_to_rev=link_to_rev+';page='+str(i)+';r_lang='+lan
+    base_url='www.booking.com'
+    language=['en'] #fr,it,de
+    for lan in language:
+        print(lan)
+        try:
+            if lan == 'en':
+                locale.setlocale(locale.LC_ALL, 'en_GB.utf8')
+            elif lan== 'fr':
+                locale.setlocale(locale.LC_ALL, 'fr_FR.utf8')
+            elif lan=='de':
+                locale.setlocale(locale.LC_ALL, 'de_DE.utf8')
+            else:
+                print('set locale')
+        except:
+            print('locale is not set, generate desired locale ex "locale-gen fr_FR.utf8"') 
+        try:
+            link_rev=hotel_soup.find('a', class_='show_all_reviews_btn')['href']
+            if '#block' in link_to_rev:
+                print('block')
+                input_rev_data=hotel_soup.select_one('label.reviews-sorting__label')
+              
+                cc1=input_rev_data.select_one('input.reviews-sorting__input')['data-cc']
+                      
+                pagename=input_rev_data.select_one('input.reviews-sorting__input')['data-pagename']
+                       
+                link_rev=base_url+'/reviewlist.it.html?cc1='+str(cc1)+';pagename='+str(pagename)+';r_lang='+str(lan)+';'
                 print(link_to_rev)
 
-                try:
-                    response = requests.get(link_to_rev,headers=headers).text
-                except:
-                    return 0
+            else:
+                link_rev=link_to_rev+';r_lang='+str(lan)+';'
+                print(link_to_rev)
+      
+       
+            for i in range (1,10): #set number of review visited pages
+                print(i)
+                link_to_rev='https://www.booking.com'+link_rev+'page='+str(i)+';'
+                print(link_to_rev)
+                response = requests.get(link_to_rev,headers=headers).text
 
                 review_soup=bs(response,'lxml')
                 try:
-                    pg=review_soup.select('p.page_showing').text
+                    try:
+                        review_soup.select_one('ul.review_list').text
+                    except:
+                        print('no results')
+                        break
+                    pg=review_soup.select_one('p.page_showing').text
                     first_show=[int(s) for s in pg.split() if s.isdigit()][0]
                     last_show=[int(s) for s in pg.split() if s.isdigit()][1]
                     diff_pg=last_show-(first_show-1)
@@ -729,18 +817,74 @@ def hotel_reviews_update (headers,link,hotel_soup) :
                 except:
                     print('no results found')
                     break
-                    
+               
                 for element in review_soup.select('li.review_item.clearfix'):
                     try:
-                        post_date=element.select_one('p.review_item_date').text.strip('\t\r\n\€xa')
-                        post_date=datetime.datetime.strptime(post_date,'%d %B %Y')
+                        post_date=element.select_one('p.review_item_date').text.split(':')[1].strip('\t\r\n\€xa')
+                        post_date=datetime.datetime.strptime(post_date,' %d %B %Y ')
                     except:
                         post_date=None
+                        
+                    try:
+                        
+                        clean=element.find('div', text=re.compile('[Cleanliness]')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                        clean=float(re.sub('[^0-9.]', "",clean))
+                    except:
+                            
+                        clean=None
 
+                    try:
+                               
+                        location=element.find('div', text=re.compile('Location')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                        location=float(re.sub('[^0-9.]', "",location))
+                    except:
+                        location=None
+                            
+                    try:
+                                
+                        comfort=element.find('div', text=re.compile('Comfort')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                        comfort=float(re.sub('[^0-9.]', "",comfort))
+                    except:
+                        comfort=None
+
+                    try:
+                              
+                        value=element.find('div', text=re.compile('Value for money')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                        value=float(re.sub('[^0-9.]', "",value))
+                       
+                    except:
+                        value=None
+
+                    try:
+                              
+                        facilities=el.find('div', text=re.compile('Facilities')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                        facilities=float(re.sub('[^0-9.]', "",facilities))
+                             
+                    except:
+                        facilities=None
+
+                    try:
+                               
+                        staff=element.find('div', text=re.compile('Staff')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                        staff=float(re.sub('[^0-9.]', "",staff))
+                               
+                    except:
+                        staff=None
+                                
+                    try:
+                              
+                        wifi=element.find('div', text=re.compile('WiFi')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                        wifi=float(re.sub('[^0-9.]', "",wifi))
+                              
+                    except:
+                        wifi=None
+
+                    print(clean,location,comfort,value,staff,wifi)
+                 
                     for el in element.find_all('div', class_='review_item_review_container'):
                         try:
                             score=el.find('span', class_="review-score-badge").text.strip('\t\r\n\€xa')
-                            score=float(re.sub('[^0-9,]', "",score).replace(",", "."))
+                            score=float(re.sub('[^0-9.,]', "",score).replace(",", "."))
                             if score>11.:
                                 print('this score is bigger than 10', link_to_rev)
                         except:
@@ -757,8 +901,15 @@ def hotel_reviews_update (headers,link,hotel_soup) :
                             pos_comment=element.find('p', class_='review_pos').text.strip('\t\r\n\눇\눉')
                         except:
                             pos_comment=''
-        
-                    for el in element.find_all('div', class_="review_item_reviewer"):
+                            
+                        try:
+                            stay=el.find('p',class_='review_staydate').text.strip('\t\r\n\눇\눉')
+                        except:
+                            stay=None
+                        print(stay)
+
+
+                    for  el in element.find_all('div', class_="review_item_reviewer"):
                         try:
                             author_name=el.h4.text.strip('\t\r\n')
                         except:
@@ -772,25 +923,176 @@ def hotel_reviews_update (headers,link,hotel_soup) :
                         except:
                             author_group='unknown'
                 
-                    hotel_reviews=hotel_review(hotel_id,score,lan,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group)
-            
+                        hotel_reviews=hotel_review(hotel_id,score,lan,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group,stay,clean,location,comfort,value,facilities,staff,wifi)
+                  
                     try:
                         db_hotel_reviews_update(hotel_reviews)
                         print('single scraping and updating done in %0.3fs' % (time.time() - t0))
-                        return 1
                     except:
                         return 0
-    except:
-        hotel_review=hotel_review(hotel_id,None,None,'','','',None,None,None,None)
-        try:
-            db_hotel_reviews_update(hotel_review)
-            print('single scraping and updating done in %0.3fs' % (time.time() - t0))
-            return 1
         except:
-            return 0
-    print('single scraping done in %0.3fs' % (time.time() - t0))
+            print('2nd method link')
+            try:
+                option_rev=hotel_soup.find("select", {"class":"reviewer_type_filter"})
+                rev_name=option_rev.find('option')['data-pagename']
+                rev_cc=option_rev.find('option')['data-cc']
+                link_rev='https://www.booking.com/reviewlist.en-gb.html?;cc1='+str(rev_cc)+';dist=1;pagename='+str(rev_name)+';r_lang='+str(lan)+';roomtype=-1;sort=f_recent_desc;sort=f_recent_desc;type=total&;'
+       
+                for i in range (0,10): #set number of review visited pages
+                    rows=20
+                    offset=i*rows
+                    link_to_rev=link_rev+'offset='+str(offset)+';rows=20'
+                    print(link_to_rev)
+                    response = requests.get(link_to_rev,headers=headers).text
+                    try:
+                        response = requests.get(link_to_rev,headers=headers).text
+                    except:
+                        print('no response')
+                        return 0
 
-  
+                    review_soup=bs(response,'lxml')
+                    
+                    try:
+                        pg=review_soup.select_one('p.page_showing').text
+                        first_show=[int(s) for s in pg.split() if s.isdigit()][0]
+                        last_show=[int(s) for s in pg.split() if s.isdigit()][1]
+                        diff_pg=last_show-(first_show-1)
+                        if diff_pg<0:
+                            print('offset out of range:serch end')
+                            break
+                    except:
+                        pass
+                  
+                    for element in review_soup.select('li.review_item.clearfix'):
+                        try:
+                            print(element.select_one('p.review_item_date').text.split(':')[1])
+                            post_date=element.select_one('p.review_item_date').text.split(':')[1].strip(u' \t\n\r\x0a')#('\t\r\n\€xa\s')
+                            print(post_date)
+                            post_date=datetime.datetime.strptime(post_date,'%d %B %Y')
+                            print(post_date)
+                        except:
+                            #print("Unexpected error:", sys.exc_info()[0])
+                            #raise
+                            post_date=None
+
+                        try:
+                               
+                            clean=element.find('div', text=re.compile('Cleanliness')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                            clean=float(re.sub('[^0-9.]', "",clean))
+                        except:
+                            
+                            clean=None
+
+                        try:
+                               
+                            location=element.find('div', text=re.compile('Location')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                            location=float(re.sub('[^0-9.]', "",location))
+                        except:
+                            location=None
+                            
+                        try:
+                                
+                            comfort=element.find('div', text=re.compile('Comfort')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                            comfort=float(re.sub('[^0-9.]', "",comfort))
+                        except:
+                            comfort=None
+
+                        try:
+                              
+                            value=element.find('div', text=re.compile('Value for money')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                            value=float(re.sub('[^0-9.]', "",value))
+                       
+                        except:
+                            value=None
+
+                        try:
+                              
+                            facilities=el.find('div', text=re.compile('Facilities')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                            facilities=float(re.sub('[^0-9.]', "",facilities))
+                             
+                        except:
+                            facilities=None
+
+                        try:
+                               
+                            staff=element.find('div', text=re.compile('Staff')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                            staff=float(re.sub('[^0-9.]', "",staff))
+                               
+                        except:
+                            staff=None
+                                
+                        try:
+                              
+                            wifi=element.find('div', text=re.compile('WiFi')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                            wifi=float(re.sub('[^0-9.]', "",wifi))
+                              
+                        except:
+                            wifi=None
+
+                        print(clean,location,comfort,value,staff,wifi)
+                 
+                        for el in element.find_all('div', class_='review_item_review_container'):
+                            try:
+                                score=el.find('span', class_="review-score-badge").text.strip('\t\r\n\€xa')
+                                score=float(re.sub('[^0-9.,]', "",score).replace(",", "."))
+                                if score>11.:
+                                    print('this score is bigger than 10', link_to_rev)
+                            except:
+                                score=None
+                            try:
+                                post_title=el.find('span',itemprop='name').text.strip('\t\r\n\눉\눇')
+                            except:
+                                post_title=''
+                            try:
+                                neg_comment=el.find('p', class_='review_neg').text.strip('\t\r\n\눇\눉') #to do: remove 눇
+                            except:
+                                neg_comment=''
+
+                            try:
+                                pos_comment=element.find('p', class_='review_pos').text.strip('\t\r\n\눇\눉')
+                            except:
+                                pos_comment=''
+                            try:
+                                stay=el.find('p',class_='review_staydate').text.strip('\t\r\n\눇\눉')
+                            except:
+                                stay=None
+                           
+                          
+
+                            #print(subscore)
+                            #text_file=open('score_debug.txt','w')
+                            #text_file.write(str(response))
+                            #text_file.close()
+                          
+
+                            for el in element.find_all('div', class_="review_item_reviewer"):
+                                try:
+                                    author_name=el.h4.text.strip('\t\r\n')
+                                except:
+                                    author_name='unknown'
+                                try:
+                                    author_nat=el.find('span', class_="reviewer_country").text.strip('\t\r\n')
+                                except:
+                                    author_nat='unknown'
+                                try:
+                                    author_group=el.find('div',class_='user_age_group').text.strip('\t\r\n')
+                                except:
+                                    author_group='unknown'
+                           
+                            hotel_reviews=hotel_review(hotel_id,score,lan,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,author_group,stay,clean,location,comfort,value,facilities,staff,wifi)
+                            print(hotel_reviews.post_title)
+                            try:
+                                db_hotel_reviews_update(hotel_reviews)
+                                print('single scraping and updating done in %0.3fs' % (time.time() - t0))
+                            except:
+                                return 0
+
+
+               
+            except:
+                return 0
+           
+    print('single scraping done in %0.3fs' % (time.time() - t0))
             
 #################################################################################################
 
@@ -798,9 +1100,9 @@ def db_hotel_list_update(hotel_table,link) :
 #connect to database "webcrawling", insert new row data in hotel_list table  if hotel_id is not present
     
     conn=psycopg2.connect('dbname='+db_name+' user='+user_name)
-
+    conn.autocommit = True
     cur=conn.cursor()
-    
+ 
     i=hotel_table
      
         
@@ -813,9 +1115,10 @@ def db_hotel_list_update(hotel_table,link) :
                  COMMIT;'''
 
     data = (i.hotel_name,i.dest_id,i.hotel_address,i.hotel_id,i.hotel_type,i.hotel_star,i.hotel_facilities,link,i.hotel_name,i.dest_id,i.hotel_address,i.hotel_id,i.hotel_type,i.hotel_star,i.hotel_facilities,link)
-
-    cur.execute(SQL, data)
-
+    try:
+        cur.execute(SQL, data)
+    except:
+        print('error in db update')
     cur.close()
     conn.close()
 
@@ -823,24 +1126,34 @@ def db_hotel_list_update(hotel_table,link) :
 
 def db_hotel_data_update(hotel_data_list) :
 #connect to database "webcrawling", insert new row data in hotel_data table
-   
+
     conn=psycopg2.connect('dbname='+db_name+' user='+user_name)
 
+    conn.autocommit = True
+    
     cur=conn.cursor()
+    
 
     for i in hotel_data_list:
 
-        SQL = '''BEGIN;
-                 UPDATE hotel_data SET hotel_id=(%s),day_in=(%s),day_out=(%s),room_id=(%s),room_type=(%s),room_size=(%s),room_facilities=(%s),inclusive=(%s),non_inclusive=(%s),price=(%s),breakfast_opt=(%s),policy_opt=(%s),max_occ=(%s),sale=(%s),search_date=(%s) WHERE price=(%s) AND day_in=(%s) AND day_out=(%s) AND search_date=(%s);
-                 INSERT INTO hotel_data (hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,inclusive,non_inclusive,price,breakfast_opt,policy_opt,max_occ,sale,search_date)
-	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_data WHERE price=(%s) AND day_in=(%s) AND day_out=(%s) AND search_date=(%s))
-                 ;
-                 COMMIT;'''
+        #SQL = '''BEGIN;
+        #         UPDATE hotel_data SET hotel_id=(%s),day_in=(%s),day_out=(%s),room_id=(%s),room_type=(%s),room_size=(%s),room_facilities=(%s),inclusive=(%s),non_inclusive=(%s),price=(%s),breakfast_opt=(%s),policy_opt=(%s),max_occ=(%s),sale=(%s),search_date=(%s) WHERE price=(%s) AND day_in=(%s) AND day_out=(%s) AND search_date=(%s) AND room_id=(%s);
+        #         INSERT INTO hotel_data (hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,inclusive,non_inclusive,price,breakfast_opt,policy_opt,max_occ,sale,search_date)
+	 #        SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_data WHERE price=(%s) AND day_in=(%s) AND day_out=(%s) AND search_date=(%s) AND room_id=(%s))
+          #       ;
+         #        COMMIT;'''
+        SQL="""
+    INSERT INTO hotel_data(hotel_id,day_in,day_out,room_id,room_type,room_size,room_facilities,inclusive,non_inclusive,price,breakfast_opt,policy_opt,max_occ,sale,search_date)
+    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);
+"""
+        
+        data=(i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.sale,i.search_date)
 
-        data = (i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.sale,i.search_date,i.price,i.day_in,i.day_out,i.search_date,i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.sale,i.search_date,i.price,i.day_in,i.day_out,i.search_date)
+
+        #data = (i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.sale,i.search_date,i.price,i.day_in,i.day_out,i.search_date,i.room_id,i.hotel_id,i.day_in,i.day_out,i.room_id,i.room_type,i.room_size,i.room_facilities,i.room_inc1,i.room_inc0,i.price,i.breakfast_opt,i.policy_opt,i.max_occ,i.sale,i.search_date,i.price,i.day_in,i.day_out,i.search_date,i.room_id)
 
         cur.execute(SQL, data)
-
+    
     cur.close()
     conn.close()
 
@@ -852,17 +1165,17 @@ def  db_hotel_reviews_update(hotel_reviews):
     i=hotel_reviews
 
     conn=psycopg2.connect('dbname='+db_name+' user='+user_name)
-
+    conn.autocommit = True
     cur=conn.cursor()
 
  
     SQL = '''BEGIN;
-                 INSERT INTO hotel_reviews (hotel_id,score,lan,post_title,positive_comment,negative_comment,post_date,author_name,author_nat,author_group) 
-	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_reviews WHERE post_date=(%s) AND author_name=(%s))
+                 INSERT INTO hotel_reviews (hotel_id,score,lan,post_title,positive_comment,negative_comment,post_date,author_name,author_nat,author_group,stay,clean,location,comfort,value,facilities,staff,wifi) 
+	         SELECT %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s WHERE NOT EXISTS (SELECT * FROM hotel_reviews WHERE post_date=(%s) AND author_name=(%s))
                  ;
                  COMMIT;'''
 
-    data = (i.hotel_id,i.score,i.lan,i.post_title,i.pos_comment,i.neg_comment,i.post_date,i.author_name,i.author_nat,i.author_group,i.post_date,i.author_name)
+    data = (i.hotel_id,i.score,i.lan,i.post_title,i.pos_comment,i.neg_comment,i.post_date,i.author_name,i.author_nat,i.author_group,i.stay,i.clean,i.location,i.comfort,i.value,i.facilities,i.staff,i.wifi,i.post_date,i.author_name)
 
     cur.execute(SQL, data)
 
@@ -875,7 +1188,7 @@ def db_hotel_ratings_update(hotel_ratings):
 #connect to database "webcrawling", insert new row data in hotel_ratings table
    
     conn=psycopg2.connect('dbname='+db_name+' user='+user_name)
-
+    conn.autocommit = True
     cur=conn.cursor()
 
     i=hotel_ratings
@@ -983,6 +1296,8 @@ try:
     user_name=key['user_name']
 except:
     key=db_key_mod()
+    db_name=key['db_name']
+    user_name=key['user_name']
 
 day_in_def=day_in_str
 date_iter_def=date_iter
@@ -1037,10 +1352,10 @@ for i in range (0,date_iter):
                 print('connection error at ',n_link)
             else:
                 while result == 0 and n_iter<max_it: 
-                    resutl=crawler('requests',link_list,day_in,day_out,i)
+                    result=crawler('requests',link_list,day_in,day_out,i)
                     n_iter+=1
                     print('Error during scraping: look at "Error_msg.txt"')
-                os.remove(os.path.join(path,'backupLink.txt'))
+              
                 print("global scraping and udating done in %0.3fs" % (time.time() - start))
        
         else:
@@ -1049,10 +1364,9 @@ for i in range (0,date_iter):
     n_link=0
 
     if args.scraping_type == 1 or args.scraping_type == 3 or args.scraping_type == 4:
-                    break
+        break
 
     day_in=day_in+datetime.timedelta(days=delta_days)
     day_out=day_out+datetime.timedelta(days=delta_days)
    
-
-
+os.remove(os.path.join(path,'backupLink.txt'))

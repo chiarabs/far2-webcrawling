@@ -9,6 +9,7 @@ def init_db():
     path=os.path.dirname(os.path.abspath(__file__))
     try:
         subprocess.call(['psql -V'])
+        print(subprocess.call(['psql -V']))
     except:
         resp=input('You need postgress, do you want intall it now? (Y/N)')
         if resp== 'Y':
@@ -49,40 +50,38 @@ hotel_name VARCHAR(80), location INTEGER, hotel_address VARCHAR(200), hotel_id I
        '''
    
 
-    if cur.execute(sql):
-        print('hotel_list table correctly created')
-    else:
-        print('error during hotel_list table creation')
-    
-    try:
-        pathfile=os.path.join(path,'hotel_link_list.csv')
-        sql=  '\copy hotel_list ( hotel_link ) FROM %s WITH CSV HEADER;'
-        #data=(pathfile,)
-        data=('hotel_link_list.csv',)
-        cur.excecute(sql,data)
-    except:
-        pass
+    cur.execute(sql)
+    print('hotel_list table created')
+        
+    #try:
+    #    pathfile=os.path.join(path,'hotel_link_list.csv')
+    #    sql=  '\copy hotel_list ( hotel_link ) FROM %s WITH CSV HEADER;'
+    #    #data=(pathfile,)
+    #    data=('hotel_link_list.csv',)
+    #    cur.excecute(sql,data)
+    #except:
+    #    pass
 
     sql = '''CREATE TABLE hotel_data (
 hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, room_id INTEGER, room_type VARCHAR(100), room_size NUMERIC(4,0), price NUMERIC(8,2), breakfast_opt VARCHAR(500), policy_opt VARCHAR(500), room_left NUMERIC(2,0), room_facilities VARCHAR(1500), max_occ NUMERIC(2,0), inclusive VARCHAR(300),  non_inclusive VARCHAR (300), sale NUMERIC(2,0)
        ) 
        '''
     cur.execute(sql)
-    print('hotel_data table correctly created')
+    print('hotel_data table created')
 
     sql = '''CREATE TABLE hotel_ratings (
-hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, av_rating NUMERIC(4,0),superb_score NUMERIC(4,0), good_score NUMERIC(4,0), average_score NUMERIC(4,0), poor_score NUMERIC(4,0), very_poor_score NUMERIC(4,0), breakfast_score NUMERIC(3,1), clean_score  NUMERIC(3,1), comfort_score  NUMERIC(3,1), location_score  NUMERIC(3,1), services_score  NUMERIC(3,1), staff_score  NUMERIC(3,1), value_score  NUMERIC(3,1), wifi_score  NUMERIC(3,1), n_ratings NUMERIC(6,0)
+hotel_id INTEGER, day_in DATE, day_out DATE, search_date DATE, av_rating NUMERIC(4,1),superb_score NUMERIC(4,0), good_score NUMERIC(4,0), average_score NUMERIC(4,0), poor_score NUMERIC(4,0), very_poor_score NUMERIC(4,0), breakfast_score NUMERIC(3,1), clean_score  NUMERIC(3,1), comfort_score  NUMERIC(3,1), location_score  NUMERIC(3,1), services_score  NUMERIC(3,1), staff_score  NUMERIC(3,1), value_score  NUMERIC(3,1), wifi_score  NUMERIC(3,1), n_ratings NUMERIC(6,0)
        ) 
        '''
     cur.execute(sql)
-    print('hotel_ratings table correctly created')
+    print('hotel_ratings table created')
 
     sql = '''CREATE TABLE hotel_reviews (
-hotel_id INTEGER, lan VARCHAR(5), post_title VARCHAR(100), positive_comment VARCHAR, negative_comment VARCHAR,post_date DATE, author_name VARCHAR(50),author_nat VARCHAR(50),author_group VARCHAR(50), score NUMERIC(4,2)
+hotel_id INTEGER, lan VARCHAR(5), post_title VARCHAR(100), positive_comment VARCHAR, negative_comment VARCHAR,post_date DATE, author_name VARCHAR(50),author_nat VARCHAR(50),author_group VARCHAR(50), score NUMERIC(4,2), stay VARCHAR(50), clean NUMERIC(4,2), location NUMERIC(4,2), comfort NUMERIC(4,2), value NUMERIC(4,2), facilities NUMERIC(4,2), staff NUMERIC(4,2), wifi NUMERIC(4,2)
        ) 
        '''
     cur.execute(sql)
-    print('hotel_reviews table correctly created')
+    print('hotel_reviews table created')
     
     con.commit()
     cur.close()
@@ -94,7 +93,21 @@ hotel_id INTEGER, lan VARCHAR(5), post_title VARCHAR(100), positive_comment VARC
     text_file.write(str(key))
     text_file.close()
 
-    return 1
+    res=input('\nDo you want to insert hotel link list into db? (Y/N)')
+              
+    if res=='Y':
+        filename=input('\nPlease, insert the csv file path and name (/path/name.csv): ')
+        try:
+            import_csv(filename,sys_user_name,db_name)
+        except:
+            print('Error, the system can not import hotel link file')
+    elif r=='N':
+        print('In order to run the webcrawler you need to insert hotel link into the postgress database')
+    else:
+        print('In order to run the webcrawler you need to insert hotel link into the postgress database')
+    
+    
+    return key
 ##################################################################################
 
 def readingdbkey():
@@ -123,7 +136,7 @@ def db_key_mod():
     except FileNotFoundError:
         p = input('No database key: create a new db (y)?  Or try to enter db name and user:')
         if p =='y':
-            init_db()
+            key=init_db()
         else:
             db_name=input('Database name: ')
             user_name=input('User name: ')
@@ -133,3 +146,10 @@ def db_key_mod():
             text_file.close()
     return key
 
+###################################################################################
+def import_csv(filename,user,db):
+   
+    command='psql -X '+db+' -U '+ user + ' -c "\copy hotel_list (hotel_link) from '+filename+'"'
+    subprocess.call(command,shell=True)
+    print('Hotel list inserted')
+    return 

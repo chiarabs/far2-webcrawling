@@ -1,1 +1,1 @@
-{'type_of_location': 'city', 'day_in_str': '2018-02-03', 'date_iter': 2, 'location': 'Aosta', 'delta_day_out': 7, 'delta_days': 7}
+{'day_in_str': '2018-02-01', 'date_iter': 17, 'type_of_location': 'city', 'delta_day_out': 7, 'delta_days': 7, 'location': 'Aosta'}
