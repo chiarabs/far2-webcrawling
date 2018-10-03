@@ -606,7 +606,7 @@ def hotel_ratings_update(day_in,day_out,link,hotel_soup):
 
     if hotel_soup.find('span', class_='review-score-badge'):
         av_rating=hotel_soup.find('span', class_='review-score-badge').text.strip('\t\r\n')
-        av_rating=float(re.sub('[^0-9,]', "", av_rating).replace(",", "."))
+        av_rating=float(re.sub('[^0-9,.]', "", av_rating).replace(",", "."))
     else:
         av_rating=None
 
