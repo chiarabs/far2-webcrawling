@@ -61,11 +61,11 @@ def crawler(driver,link_list,day_in,day_out,date_iter):
 
     if driver == 'requests':
         #setting random user agent
-        try:
-            ua = UserAgent()
-        except FakeUserAgentError:
-            print("\nConnection error, please verify your connection")
-            return 'connection error'
+        #try:
+        #    ua = UserAgent()
+        #except FakeUserAgentError:
+        #    print("\nConnection error, please verify your connection")
+        #    return 'connection error'
 
         try:
             headers={'User-agent': ua.random}
@@ -761,7 +761,7 @@ def hotel_reviews_update (headers,link,hotel_soup) :
         return
     print(hotel_id)
 
-    base_url='www.booking.com'
+    #base_url='www.booking.com'
     language=['en'] #fr,it,de
     for lan in language:
         print(lan)
@@ -933,11 +933,11 @@ def hotel_reviews_update (headers,link,hotel_soup) :
         except:
             print('2nd method link')
             try:
-                option_rev=hotel_soup.find("select", {"class":"reviewer_type_filter"})
+                option_rev=hotel_soup.find("select", {"id":"reviewer_type_filter"})
                 rev_name=option_rev.find('option')['data-pagename']
                 rev_cc=option_rev.find('option')['data-cc']
                 link_rev='https://www.booking.com/reviewlist.en-gb.html?;cc1='+str(rev_cc)+';dist=1;pagename='+str(rev_name)+';r_lang='+str(lan)+';roomtype=-1;sort=f_recent_desc;sort=f_recent_desc;type=total&;'
-       
+                print(link_rev)
                 for i in range (0,10): #set number of review visited pages
                     rows=20
                     offset=i*rows
@@ -962,100 +962,101 @@ def hotel_reviews_update (headers,link,hotel_soup) :
                             break
                     except:
                         pass
-                  
-                    for element in review_soup.select('li.review_item.clearfix'):
-                        try:
-                            print(element.select_one('p.review_item_date').text.split(':')[1])
-                            post_date=element.select_one('p.review_item_date').text.split(':')[1].strip(u' \t\n\r\x0a')#('\t\r\n\€xa\s')
-                            print(post_date)
-                            post_date=datetime.datetime.strptime(post_date,'%d %B %Y')
-                            print(post_date)
-                        except:
-                            #print("Unexpected error:", sys.exc_info()[0])
-                            #raise
-                            post_date=None
+                    print(review_soup.select_one('li.review_item.clearfix'))
+                    if  review_soup.select_one('li.review_item.clearfix') is not None:
+                        for element in review_soup.select('li.review_item.clearfix'):
+                            try:
+                                print(element.select_one('p.review_item_date').text.split(':')[1])
+                                post_date=element.select_one('p.review_item_date').text.split(':')[1].strip(u' \t\n\r\x0a')#('\t\r\n\€xa\s')
+                                print(post_date)
+                                post_date=datetime.datetime.strptime(post_date,'%d %B %Y')
+                                print(post_date)
+                            except:
+                                #print("Unexpected error:", sys.exc_info()[0])
+                                #raise
+                                post_date=None
 
-                        try:
-                               
-                            clean=element.find('div', text=re.compile('Cleanliness')).parent.find('span',class_='c-reviews__score-bar-number__number').text
-                            clean=float(re.sub('[^0-9.]', "",clean))
-                        except:
+                            try:
+                                    
+                                clean=element.find('div', text=re.compile('Cleanliness')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                                clean=float(re.sub('[^0-9.]', "",clean))
+                            except:
                             
-                            clean=None
+                                clean=None
 
-                        try:
+                            try:
                                
-                            location=element.find('div', text=re.compile('Location')).parent.find('span',class_='c-reviews__score-bar-number__number').text
-                            location=float(re.sub('[^0-9.]', "",location))
-                        except:
-                            location=None
+                                location=element.find('div', text=re.compile('Location')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                                location=float(re.sub('[^0-9.]', "",location))
+                            except:
+                                location=None
                             
-                        try:
-                                
-                            comfort=element.find('div', text=re.compile('Comfort')).parent.find('span',class_='c-reviews__score-bar-number__number').text
-                            comfort=float(re.sub('[^0-9.]', "",comfort))
-                        except:
-                            comfort=None
+                            try:
+                                    
+                                comfort=element.find('div', text=re.compile('Comfort')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                                comfort=float(re.sub('[^0-9.]', "",comfort))
+                            except:
+                                comfort=None
 
-                        try:
+                            try:
                               
-                            value=element.find('div', text=re.compile('Value for money')).parent.find('span',class_='c-reviews__score-bar-number__number').text
-                            value=float(re.sub('[^0-9.]', "",value))
+                                value=element.find('div', text=re.compile('Value for money')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                                value=float(re.sub('[^0-9.]', "",value))
                        
-                        except:
-                            value=None
+                            except:
+                                value=None
 
-                        try:
-                              
-                            facilities=el.find('div', text=re.compile('Facilities')).parent.find('span',class_='c-reviews__score-bar-number__number').text
-                            facilities=float(re.sub('[^0-9.]', "",facilities))
+                            try:
+                                    
+                                facilities=element.find('div', text=re.compile('Facilities')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                                facilities=float(re.sub('[^0-9.]', "",facilities))
                              
-                        except:
-                            facilities=None
+                            except:
+                                    facilities=None
 
-                        try:
+                            try:
                                
-                            staff=element.find('div', text=re.compile('Staff')).parent.find('span',class_='c-reviews__score-bar-number__number').text
-                            staff=float(re.sub('[^0-9.]', "",staff))
+                                staff=element.find('div', text=re.compile('Staff')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                                staff=float(re.sub('[^0-9.]', "",staff))
                                
-                        except:
-                            staff=None
+                            except:
+                                staff=None
                                 
-                        try:
+                            try:
                               
-                            wifi=element.find('div', text=re.compile('WiFi')).parent.find('span',class_='c-reviews__score-bar-number__number').text
-                            wifi=float(re.sub('[^0-9.]', "",wifi))
+                                wifi=element.find('div', text=re.compile('WiFi')).parent.find('span',class_='c-reviews__score-bar-number__number').text
+                                wifi=float(re.sub('[^0-9.]', "",wifi))
                               
-                        except:
-                            wifi=None
+                            except:
+                                wifi=None
 
-                        print(clean,location,comfort,value,staff,wifi)
+                            print(clean,location,comfort,value,staff,wifi)
                  
-                        for el in element.find_all('div', class_='review_item_review_container'):
-                            try:
-                                score=el.find('span', class_="review-score-badge").text.strip('\t\r\n\€xa')
-                                score=float(re.sub('[^0-9.,]', "",score).replace(",", "."))
-                                if score>11.:
-                                    print('this score is bigger than 10', link_to_rev)
-                            except:
-                                score=None
-                            try:
-                                post_title=el.find('span',itemprop='name').text.strip('\t\r\n\눉\눇')
-                            except:
-                                post_title=''
-                            try:
-                                neg_comment=el.find('p', class_='review_neg').text.strip('\t\r\n\눇\눉') #to do: remove 눇
-                            except:
-                                neg_comment=''
+                            for el in element.find_all('div', class_='review_item_review_container'):
+                                try:
+                                    score=el.find('span', class_="review-score-badge").text.strip('\t\r\n\€xa')
+                                    score=float(re.sub('[^0-9.,]', "",score).replace(",", "."))
+                                    if score>11.:
+                                        print('this score is bigger than 10', link_to_rev)
+                                except:
+                                    score=None
+                                try:
+                                    post_title=el.find('span',itemprop='name').text.strip('\t\r\n\눉\눇')
+                                except:
+                                    post_title=''
+                                try:
+                                    neg_comment=el.find('p', class_='review_neg').text.strip('\t\r\n\눇\눉') #to do: remove 눇
+                                except:
+                                    neg_comment=''
 
-                            try:
-                                pos_comment=element.find('p', class_='review_pos').text.strip('\t\r\n\눇\눉')
-                            except:
-                                pos_comment=''
-                            try:
-                                stay=el.find('p',class_='review_staydate').text.strip('\t\r\n\눇\눉')
-                            except:
-                                stay=None
+                                try:
+                                    pos_comment=element.find('p', class_='review_pos').text.strip('\t\r\n\눇\눉')
+                                except:
+                                    pos_comment=''
+                                try:
+                                    stay=el.find('p',class_='review_staydate').text.strip('\t\r\n\눇\눉')
+                                except:
+                                    stay=None
                            
                           
 
@@ -1086,6 +1087,71 @@ def hotel_reviews_update (headers,link,hotel_soup) :
                                 print('single scraping and updating done in %0.3fs' % (time.time() - t0))
                             except:
                                 return 0
+                            
+                  
+                    elif review_soup.select_one('li.review_list_new_item_block') is not None:
+                        print(review_soup.select('li.review_list_new_item_block'))  
+                        for el in review_soup.select('li.review_list_new_item_block'):
+                            try:
+                                print(el.select_one('span.c-review-block__date').text.split(':')[1])
+                                post_date=el.select_one('span.c-review-block__date').text.split(':')[1].strip(u' \t\n\r\x0a')#('\t\r\n\€xa\s')
+                                print(post_date)
+                                post_date=datetime.datetime.strptime(post_date,'%d %B %Y')
+                                print(post_date)
+                            except:
+                                #print("Unexpected error:", sys.exc_info()[0])
+                                #raise
+                                post_date=None
+                            try:
+                                score=el.find('span', class_="bui-review-score c-score").text.strip('\t\r\n\€xa')
+                                score=float(re.sub('[^0-9.,]', "",score).replace(",", "."))
+                                if score>11.:
+                                    print('this score is bigger than 10', link_to_rev)
+                            except:
+                                score=None
+                            try:
+                                post_title=el.find('h3', class_='c-review-block__title').text.strip('\t\r\n\눉\눇')
+                            except:
+                                post_title=''
+                            try:
+                                neg_comment_line=el.find('span', class_='c-review__prefix').find_parent('p')
+                                neg_comment=neg_comment_line.text.strip('\t\r\n\눇\눉') #to do: remove 눇
+                            except:
+                                neg_comment=''
+
+                            try:
+                                pos_comment_line=el.find('span', class_='c-review__prefix c-review__prefix--color-green').find_parent('p')
+                                pos_comment=pos_comment_line.text.strip('\t\r\n\눇\눉') #to do: remove 눇
+                            except:
+                                pos_comment=''
+                            try:
+                                stay=el.select('span.c-review-block__date')[1].text.strip(u' \t\n\r\x0a')#('\t\r\n\€xa\s')
+                                print(stay)
+                            except:
+                                stay=None
+
+                            try:
+                                author_name=el.select_one('span.bui-avatar-block__title').text.strip(u' \t\n\r\x0a')#('\t\r\n\€xa\s')
+                            except:
+                                author_name='unknown'
+                            try:
+                                author_nat=el.select_one('span.bui-avatar-block__subtitle').text.strip('\t\r\n')
+                            except:
+                                author_nat='unknown'
+                                
+                            hotel_reviews=hotel_review(hotel_id,score,lan,post_title,pos_comment,neg_comment,post_date,author_name,author_nat,None,None,None,None,None,None,None,None,None)
+                            try:
+                                db_hotel_reviews_update(hotel_reviews)
+                                print('single scraping and updating done in %0.3fs' % (time.time() - t0))
+                            except:
+                                return 0
+
+
+
+                                
+                    else:
+                        print('no data found')
+                            
 
 
                
@@ -1329,6 +1395,7 @@ day_out=day_out.date()
 
 
 link_list=db_hotel_link()
+print(link_list)
 print('type of scraping: ',args.scraping_type)
 
 # loop on date search
@@ -1339,7 +1406,7 @@ for i in range (0,date_iter):
 
         n_iter=0 
         max_it=10 #fix the max number of request attempt
-  
+        print (link)
         hotel_link=base_url+link[0]+'?;checkin='+str(day_in)+';checkout='+str(day_out)
         print (hotel_link)
         
